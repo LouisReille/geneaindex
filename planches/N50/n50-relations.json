@@ -1,0 +1,68 @@
+{
+  "planche": "N50",
+  "sourcePdf": "N50AntoineR.pdf",
+  "updated": "2026-03-27",
+  "notes": "Charles-Antoine REILLE (N50_1.3.2.1.6a.1) a trois unions : Hélène de YTURBE, Elena VYSKREBENTSEVA, Isabelle van KEIRSBILCK. Philippe de YTURBE (N50_0000001053) est uniquement l'époux de Nicole POURROY… (N50_0000001051), parents d'Hélène — pas les unions avec Elena/Isabelle.",
+  "marriages": [
+    {
+      "from": "N50_0000001044",
+      "to": "N50_0000001045",
+      "label": "Bernard VILLEDEY — Colette DAPREMONT"
+    },
+    {
+      "from": "N50_0000001047",
+      "to": "N50_0000001050",
+      "label": "Georges van KEIRSBILCK — Magda PIENS"
+    },
+    {
+      "from": "N50_0000001053",
+      "to": "N50_0000001051",
+      "label": "Philippe de YTURBE — Nicole POURROY de LAUBEMIERE…"
+    },
+    {
+      "from": "N50_1.3.2.1.6a.1",
+      "to": "N50_0000001048",
+      "order": 1,
+      "label": "Charles-Antoine REILLE — Hélène de YTURBE (2 enfants)"
+    },
+    {
+      "from": "N50_1.3.2.1.6a.1",
+      "to": "N50_0000001046",
+      "order": 2,
+      "label": "Charles-Antoine REILLE — Elena VYSKREBENTSEVA"
+    },
+    {
+      "from": "N50_1.3.2.1.6a.1",
+      "to": "N50_0000001049",
+      "order": 3,
+      "label": "Charles-Antoine REILLE — Isabelle van KEIRSBILCK"
+    },
+    {
+      "from": "N50_1.3.2.1.6a.2",
+      "to": "N50_0000001052",
+      "label": "Géraldine REILLE — Olivier VILLEDEY"
+    }
+  ],
+  "parentChildHighlights": [
+    {
+      "from": "N50_0000001053",
+      "to": "N50_0000001048",
+      "label": "Philippe — Hélène (fille)"
+    },
+    {
+      "from": "N50_0000001051",
+      "to": "N50_0000001048",
+      "label": "Nicole — Hélène (fille)"
+    },
+    {
+      "from": "N50_1.3.2.1.6a.1",
+      "to": "N50_1.3.2.1.6a.1a.1",
+      "label": "Charles-Antoine — Jean-Philippe REILLE"
+    },
+    {
+      "from": "N50_1.3.2.1.6a.1",
+      "to": "N50_1.3.2.1.6a.1a.2",
+      "label": "Charles-Antoine — Caroline REILLE"
+    }
+  ]
+}

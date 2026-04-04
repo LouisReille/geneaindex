@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Geneaindex — Arbre généalogique</title>
+    <script src="https://unpkg.com/vis-network/standalone/umd/vis-network.min.js"></script>
+    <link rel="stylesheet" href="css/styles.css">
+    <link rel="stylesheet" href="css/components/person-popup.css">
+    <link rel="stylesheet" href="css/components/search-results.css">
+    <link rel="stylesheet" href="css/components/generation-grid.css">
+</head>
+<body>
+    <header>
+        <div class="header-top">
+            <h1>🌳 Geneaindex</h1>
+            <nav class="main-menu">
+                <button class="menu-item active" data-menu="tree">👥 Ancêtres</button>
+                <button class="menu-item" data-menu="descendants">👶 Descendants</button>
+                <button class="menu-item" data-menu="link">🌳 Arbre complet</button>
+                <button class="menu-item" data-menu="lca">👥 Ancêtre commun</button>
+                <button class="menu-item" data-menu="family">👨‍👩‍👧‍👦 Nom de famille</button>
+            </nav>
+        </div>
+        <div class="controls" id="treeControls">
+            <div class="file-input-wrapper hidden">
+                <input type="file" id="jsonFile" accept=".json">
+                <label for="jsonFile" class="file-label">📁 Charger un fichier JSON</label>
+            </div>
+            <div class="search-wrapper" id="searchWrapper">
+                <input type="text" id="personSearch" placeholder="🔍 Rechercher une personne…" autocomplete="off">
+                <div id="searchResults" class="search-results"></div>
+            </div>
+            <div class="search-wrapper hidden" id="descendantsSearchWrapper">
+                <div class="descendants-controls-row">
+                    <div class="descendants-search-field">
+                        <label class="descendants-label" for="descendantsPersonSearch">Personne de départ</label>
+                        <input type="text" id="descendantsPersonSearch" placeholder="🔍 Rechercher une personne…" autocomplete="off">
+                        <div id="descendantsSearchResults" class="search-results"></div>
+                    </div>
+                    <div class="descendants-gen-field">
+                        <label class="descendants-label" for="descendantsGenSelect">Générations descendantes</label>
+                        <select id="descendantsGenSelect" class="descendants-gen-select">
+                            <option value="2">2</option>
+                            <option value="3" selected>3</option>
+                            <option value="4">4</option>
+                            <option value="5">5</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+            <div class="search-wrapper hidden" id="linkSearchWrapper">
+                <input type="text" id="linkPersonSearch" placeholder="🔍 Rechercher une personne…" autocomplete="off">
+                <div id="linkSearchResults" class="search-results"></div>
+            </div>
+            <div class="search-wrapper hidden" id="lcaSearchWrapper">
+                <div style="display: flex; gap: 1rem; width: 100%;">
+                    <div style="flex: 1;">
+                        <label style="display: block; margin-bottom: 0.25rem; font-size: 0.85rem; color: #666;">Personne 1 :</label>
+                        <input type="text" id="lcaPerson1Search" placeholder="🔍 Première personne…" autocomplete="off">
+                        <div id="lcaPerson1Results" class="search-results"></div>
+                    </div>
+                    <div style="flex: 1;">
+                        <label style="display: block; margin-bottom: 0.25rem; font-size: 0.85rem; color: #666;">Personne 2 :</label>
+                        <input type="text" id="lcaPerson2Search" placeholder="🔍 Deuxième personne…" autocomplete="off">
+                        <div id="lcaPerson2Results" class="search-results"></div>
+                    </div>
+                </div>
+            </div>
+            <div class="search-wrapper hidden" id="familySearchWrapper">
+                <input type="text" id="familyNameSearch" placeholder="🔍 Rechercher un nom de famille…" autocomplete="off">
+                <div id="familyNameResults" class="search-results"></div>
+            </div>
+            <div class="info">
+                <div class="stats">
+                    <div class="stat">
+                        <span class="stat-value" id="individualCount">0</span>
+                        <span class="stat-label">Personnes</span>
+                    </div>
+                    <div class="stat">
+                        <span class="stat-value" id="relationshipCount">0</span>
+                        <span class="stat-label">Liens</span>
+                    </div>
+                    <div class="stat">
+                        <span class="stat-value" id="plancheCount">0</span>
+                        <span class="stat-label">Planches</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="legend" id="treeLegend">
+            <div class="legend-item">
+                <div class="legend-color legend-color-individual"></div>
+                <span>Personne</span>
+            </div>
+            <div class="legend-item">
+                <div class="legend-color legend-color-marriage"></div>
+                <span>Mariage</span>
+            </div>
+            <div class="legend-item">
+                <div class="legend-color legend-color-parent-child"></div>
+                <span>Parent–enfant</span>
+            </div>
+        </div>
+        <div class="controls hidden" id="descendantsControls">
+            <p>Descendants sur 2 à 5 générations sous la personne choisie (enfants, petits-enfants, etc.). Les conjoints liés par un mariage sont inclus lorsqu’ils sont dans le sous-arbre.</p>
+        </div>
+        <div class="controls hidden" id="linkControls">
+            <p>Arbre complet : toutes les personnes, par génération. Utilisez le bouton au centre de la zone pour lancer le chargement.</p>
+            <div id="lockControls" class="lock-controls hidden">
+                <button id="clearAllLocks" class="clear-locks-btn" title="Effacer tous les verrous d’arbres familiaux">
+                    ✕ Tout déverrouiller
+                </button>
+            </div>
+        </div>
+        <div class="controls hidden" id="lcaControls">
+            <p>Trouver l’ancêtre commun le plus récent entre deux personnes</p>
+            <div id="lcaResult" style="margin-top: 1rem; padding: 1rem; background: #f8f9fa; border-radius: 4px; display: none;">
+                <strong>Ancêtre commun :</strong> <span id="lcaResultName"></span>
+            </div>
+        </div>
+        <div class="controls hidden" id="familyControls">
+            <p>Relations entre personnes portant le même nom de famille</p>
+            <div id="familyResult" style="margin-top: 1rem; padding: 1rem; background: #f8f9fa; border-radius: 4px; display: none;">
+                <strong>Trouvé :</strong> <span id="familyCount">0</span> personne(s) avec ce nom
+            </div>
+        </div>
+    </header>
+    <main>
+        <div class="tree-view-wrap">
+            <div id="tree-container"></div>
+            <div id="linkLoadPrompt" class="link-load-overlay hidden" aria-hidden="true">
+                <div class="link-load-panel">
+                    <p class="link-load-title">Arbre complet</p>
+                    <p class="link-load-desc">Affiche toutes les personnes par génération. Le calcul peut prendre plusieurs minutes.</p>
+                    <button type="button" id="linkLoadFullTreeBtn" class="link-load-full-btn">Charger l’arbre complet</button>
+                    <p class="link-load-bg-hint" id="linkLoadBgHint">Le chargement peut continuer en arrière-plan si vous changez de menu.</p>
+                </div>
+            </div>
+        </div>
+        <!-- Zoom controls -->
+        <div id="zoomControls" class="zoom-controls">
+            <button id="zoomInBtn" class="zoom-btn" title="Zoom avant">+</button>
+            <button id="zoomOutBtn" class="zoom-btn" title="Zoom arrière">−</button>
+            <button id="zoomResetBtn" class="zoom-btn" title="Réinitialiser le zoom">⌂</button>
+        </div>
+        <div class="sidebar" id="sidebar">
+            <h2>Détails</h2>
+            <div id="personDetails"></div>
+        </div>
+        <div class="loading hidden" id="loading">
+            <div class="loading-spinner"></div>
+            <p>Chargement des données…</p>
+            <div class="progress-bar-container hidden" id="progressBarContainer">
+                <div class="progress-bar">
+                    <div class="progress-bar-fill" id="progressBarFill"></div>
+                </div>
+                <div class="progress-text" id="progressText">0%</div>
+            </div>
+        </div>
+        <div class="error hidden" id="error"></div>
+        <div class="person-popup hidden" id="personPopup">
+            <div class="person-popup-content" id="personPopupContent"></div>
+        </div>
+    </main>
+
+    <!-- Show loading immediately -->
+    <script>
+        (function() {
+            const loadingEl = document.getElementById('loading');
+            if (loadingEl) {
+                loadingEl.classList.remove('hidden');
+                loadingEl.innerHTML = '<div class="loading-spinner"></div><p>Chargement des données généalogiques…</p><p style="font-size: 0.9em; color: #666;">Cela peut prendre quelques secondes…</p>';
+            }
+        })();
+    </script>
+    
+    <!-- Load modules in order - using defer so they don't block rendering -->
+    <script src="js/data.js" defer></script>
+    <!-- Menus : config (nombres) puis core/catalogue getMenuLayout -->
+    <script src="js/modules/menus/ancetres/config.js" defer></script>
+    <script src="js/modules/menus/descendants/config.js" defer></script>
+    <script src="js/modules/menus/arbre-complet/config.js" defer></script>
+    <script src="js/modules/menus/ancetre-commun/config.js" defer></script>
+    <script src="js/modules/menus/nom-de-famille/config.js" defer></script>
+    <script src="js/modules/core/config.js" defer></script>
+    <!-- Placement par menu (après getMenuLayout) -->
+    <script src="js/modules/menus/ancetres/positioning.js" defer></script>
+    <script src="js/modules/menus/descendants/positioning.js" defer></script>
+    <script src="js/modules/menus/arbre-complet/positioning.js" defer></script>
+    <script src="js/modules/menus/ancetre-commun/positioning.js" defer></script>
+    <script src="js/modules/core/state.js" defer></script>
+    <script src="js/modules/core/utils.js" defer></script>
+    <!-- Data processing -->
+    <script src="js/modules/data/data-processing.js" defer></script>
+    <!-- UI components -->
+    <script src="js/modules/ui/templates.js" defer></script>
+    <script src="js/modules/ui/grid.js" defer></script>
+    <script src="js/modules/ui/ui.js" defer></script>
+    <!-- Visualization -->
+    <script src="js/modules/visualization/network.js" defer></script>
+    <!-- Features -->
+    <script src="js/modules/features/search.js" defer></script>
+    <script src="js/modules/features/lca.js" defer></script>
+    <!-- Main application -->
+    <script src="js/main.js" defer></script>
+</body>
+</html>

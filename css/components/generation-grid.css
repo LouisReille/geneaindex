@@ -1,0 +1,8 @@
+/* Generation Grid Component Styles */
+
+.generation-label {
+    position: absolute;
+    display: flex;
+    visibility: visible;
+}
+
