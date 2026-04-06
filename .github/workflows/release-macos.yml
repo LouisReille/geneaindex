@@ -1,0 +1,35 @@
+# Construit les .dmg Apple Silicon + Intel et les attache à la release GitHub déclenchante.
+name: Release macOS DMGs
+
+on:
+  release:
+    types: [published]
+
+permissions:
+  contents: write
+
+jobs:
+  dmg:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build DMGs (arm64 + x64)
+        run: npx electron-builder --mac dmg
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Upload DMGs to this release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/Geneaindex-*.dmg
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

@@ -2065,24 +2065,48 @@ function setupDownloadModal() {
 
     const rows = [
         {
+            sectionTitle: 'macOS',
             key: 'macArm64',
-            label: 'macOS — Apple Silicon (M1, M2, M3…)',
+            label: 'Apple Silicon (M1, M2, M3…)',
             hint: 'Image disque .dmg — Mac récents à processeur ARM.'
         },
         {
             key: 'macX64',
-            label: 'macOS — Intel (x64)',
+            label: 'Intel (x64)',
             hint: 'Image disque .dmg — Mac Intel (Core i5, i7, i9…).'
         },
         {
-            key: 'winNsis',
-            label: 'Windows — installateur (64 bits)',
-            hint: 'Fichier .exe — installation classique (Windows 10 / 11 64 bits).'
+            sectionTitle: 'Windows — PC 64 bits (Intel / AMD)',
+            key: 'winNsisX64',
+            label: 'Installateur (.exe)',
+            hint: 'Windows 10 / 11 64 bits — installation classique (recommandé).'
         },
         {
-            key: 'winZip',
-            label: 'Windows — archive ZIP (64 bits)',
-            hint: 'Sans installateur : dézipper puis lancer l’exécutable (usage type portable).'
+            key: 'winZipX64',
+            label: 'Archive ZIP (portable)',
+            hint: 'Sans installateur : dézipper le dossier et lancer Geneaindex.exe.'
+        },
+        {
+            sectionTitle: 'Windows — ARM64 (Snapdragon, certains portables)',
+            key: 'winNsisArm64',
+            label: 'Installateur (.exe)',
+            hint: 'Windows 11 sur processeur ARM (Surface Pro X, etc.).'
+        },
+        {
+            key: 'winZipArm64',
+            label: 'Archive ZIP (portable)',
+            hint: 'Même usage que le ZIP x64, binaire compilé pour ARM64.'
+        },
+        {
+            sectionTitle: 'Windows — 32 bits (anciens PC)',
+            key: 'winNsisIa32',
+            label: 'Installateur (.exe)',
+            hint: 'Windows 32 bits uniquement (systèmes très anciens).'
+        },
+        {
+            key: 'winZipIa32',
+            label: 'Archive ZIP (portable)',
+            hint: 'Version portable 32 bits si l’installateur ne convient pas.'
         }
     ];
 
@@ -2091,6 +2115,9 @@ function setupDownloadModal() {
         let html =
             '<p class="download-intro">Choisissez la version correspondant à votre ordinateur.</p>';
         rows.forEach(function (row) {
+            if (row.sectionTitle) {
+                html += '<p class="download-section">' + row.sectionTitle + '</p>';
+            }
             const url = getDownloadUrl(row.key);
             const fname = names[row.key];
             const linkHtml = url

@@ -265,6 +265,19 @@ header {
     color: #37474f;
 }
 
+.download-section {
+    margin: 1rem 0 0.5rem;
+    font-size: 0.8rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: #546e7a;
+}
+
+.download-intro + .download-section {
+    margin-top: 0.75rem;
+}
+
 .download-row {
     margin-bottom: 0.75rem;
     padding: 0.65rem 0.75rem;

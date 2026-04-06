@@ -44,8 +44,11 @@ const CONFIG = {
  */
 var DOWNLOAD_LINKS = {
     version: '1.0.0',
-    /** URL du dossier de release sans slash final (ex. GitHub : …/releases/download/v1.0.0). Vide = liens inactifs. */
-    baseUrl: ''
+    /**
+     * Dossier de téléchargement GitHub (sans slash final).
+     * Doit correspondre au tag de release : tag `v1.0.0` → …/download/v1.0.0
+     */
+    baseUrl: 'https://github.com/LouisReille/geneaindex/releases/download/v1.0.0'
 };
 
 function getDownloadFilenames() {
@@ -53,8 +56,12 @@ function getDownloadFilenames() {
     return {
         macArm64: 'Geneaindex-' + v + '-mac-arm64.dmg',
         macX64: 'Geneaindex-' + v + '-mac-x64.dmg',
-        winNsis: 'Geneaindex-' + v + '-win-x64.exe',
-        winZip: 'Geneaindex-' + v + '-win-x64.zip'
+        winNsisX64: 'Geneaindex-' + v + '-win-x64.exe',
+        winZipX64: 'Geneaindex-' + v + '-win-x64.zip',
+        winNsisArm64: 'Geneaindex-' + v + '-win-arm64.exe',
+        winZipArm64: 'Geneaindex-' + v + '-win-arm64.zip',
+        winNsisIa32: 'Geneaindex-' + v + '-win-ia32.exe',
+        winZipIa32: 'Geneaindex-' + v + '-win-ia32.zip'
     };
 }
 
