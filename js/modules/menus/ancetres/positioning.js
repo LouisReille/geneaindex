@@ -56,9 +56,21 @@ function calculateAncestorPositions(nodes, coupleGroups, personToCoupleGroup, pa
         const asc = childToParents.get(id) || [];
         asc.forEach((p) => collectLeftBranchAncestors(p));
     }
+    const rightBranchAncestorSet = new Set();
+    function collectRightBranchAncestors(id) {
+        if (!id || rightBranchAncestorSet.has(id)) {
+            return;
+        }
+        rightBranchAncestorSet.add(id);
+        const asc = childToParents.get(id) || [];
+        asc.forEach((p) => collectRightBranchAncestors(p));
+    }
     const rootParentsForSide = childToParents.get(selectedPersonId) || [];
     if (rootParentsForSide.length >= 1) {
         collectLeftBranchAncestors(rootParentsForSide[0]);
+    }
+    if (rootParentsForSide.length >= 2) {
+        collectRightBranchAncestors(rootParentsForSide[1]);
     }
 
     let uniformSpacing = L.ancestorUniformSpacing;
@@ -134,7 +146,10 @@ function calculateAncestorPositions(nodes, coupleGroups, personToCoupleGroup, pa
             const outerLegFrac = 1 - innerLegFrac;
             let leftLeg;
             let rightLeg;
-            if (inLeftBranch || centerX < 0) {
+            // Ne pas utiliser centerX < 0 ici : ce n’est pas la « branche gauche » généalogique
+            // (ensemble leftBranchAncestorSet). Sinon l’asymétrie jambe intérieure / extérieure
+            // s’applique à tort aux nœuds à gauche de l’axe pour d’autres raisons.
+            if (inLeftBranch) {
                 rightLeg = horizontalSpacing * innerLegFrac;
                 leftLeg = horizontalSpacing * outerLegFrac;
             } else if (centerX > 0) {
@@ -222,63 +237,156 @@ function calculateAncestorPositions(nodes, coupleGroups, personToCoupleGroup, pa
         });
     }
 
+    /** Regroupe les ids d’une ligne en couples (même groupe mariage) puis célibataires, ordre gauche→droite. */
+    function buildMarriageGroupsForRow(ids) {
+        const used = new Set();
+        const groups = [];
+        const sorted = sortRowIdsByX(ids);
+        sorted.forEach((id) => {
+            if (used.has(id)) return;
+            const cg = personToCoupleGroup.get(id);
+            if (cg === undefined) {
+                groups.push([id]);
+                used.add(id);
+                return;
+            }
+            const members = coupleGroups.get(cg) || [];
+            const partner = members.find((m) => m !== id && ids.includes(m));
+            if (partner && !used.has(partner)) {
+                if (positions[id].x <= positions[partner].x) {
+                    groups.push([id, partner]);
+                } else {
+                    groups.push([partner, id]);
+                }
+                used.add(id);
+                used.add(partner);
+            } else {
+                groups.push([id]);
+                used.add(id);
+            }
+        });
+        return groups;
+    }
+
+    /** Distance centre → centre du premier au dernier nœud de la ligne (couples serrés, puis écart entre groupes). */
+    function rowSpanLengthFromGroups(groups, gapBetweenGroups) {
+        if (groups.length === 0) return 0;
+        let span = 0;
+        groups.forEach((g, gi) => {
+            if (g.length === 2) span += coupleMinCenter;
+            if (gi < groups.length - 1) span += gapBetweenGroups;
+        });
+        return span;
+    }
+
+    /**
+     * Place une ligne : conjoints côte à côte (coupleMinCenter), pas d’individu entre les deux époux ;
+     * écart horizontal entre couples (ou célibataires) distincts (voir ancestorRowBetweenCouplesGap).
+     * @param {number} startFirstCenter — abscisse du centre du premier nœud (gauche) de la ligne.
+     */
+    function placeRowByMarriageGroupsFrom(ids, minDxRow, startFirstCenter) {
+        const groups = buildMarriageGroupsForRow(ids);
+        let x = startFirstCenter;
+        groups.forEach((g, gi) => {
+            if (g.length === 1) {
+                positions[g[0]].x = x;
+                if (gi < groups.length - 1) x += minDxRow;
+            } else {
+                positions[g[0]].x = x;
+                positions[g[1]].x = x + coupleMinCenter;
+                x = positions[g[1]].x;
+                if (gi < groups.length - 1) x += minDxRow;
+            }
+        });
+    }
+
+    function blockWidthForRow(ids, minDxRow) {
+        return rowSpanLengthFromGroups(buildMarriageGroupsForRow(ids), minDxRow);
+    }
+
     /**
      * Évite les chevauchements sur chaque ligne ; si la ligne mélange branche gauche / droite,
      * on regroupe à gauche les ascendants du parent gauche de la racine et à droite les autres,
-     * avec un vide au milieu (ancestorRowBetweenSidesGap). Sinon, simple chaîne espacée.
+     * avec un vide au milieu (ancestorRowBetweenSidesGap). Sinon, placement par couples (conjoints
+     * côte à côte) puis espacement entre groupes.
      */
     function spreadSameYRows() {
         const minDx = minCenterSeparation();
+        let gapBetweenCouples = L.ancestorRowBetweenCouplesGap;
+        if (typeof gapBetweenCouples !== 'number' || gapBetweenCouples < minDx) {
+            gapBetweenCouples = minDx;
+        }
         let betweenGap = L.ancestorRowBetweenSidesGap;
         if (typeof betweenGap !== 'number' || betweenGap < 0) {
             betweenGap = 120;
         }
-        const yTol = 4;
+        if (betweenGap < gapBetweenCouples) {
+            betweenGap = gapBetweenCouples;
+        }
+        // Même rangée = même pas vertical (uniformSpacing), pas un arrondi en pixels (4 px
+        // cassait le regroupement : les nœuds d’une ligne se retrouvaient dans plusieurs seaux,
+        // le découpage gauche/droite ne s’appliquait pas → mélange « un sur deux »).
+        const verticalStep = uniformSpacing;
         const rowBuckets = new Map();
         positioned.forEach((id) => {
             const p = positions[id];
             if (!p) {
                 return;
             }
-            const yKey = Math.round(p.y / yTol) * yTol;
-            if (!rowBuckets.has(yKey)) {
-                rowBuckets.set(yKey, []);
+            const rowIdx = Math.round(-p.y / verticalStep);
+            if (!rowBuckets.has(rowIdx)) {
+                rowBuckets.set(rowIdx, []);
             }
-            rowBuckets.get(yKey).push(id);
+            rowBuckets.get(rowIdx).push(id);
         });
         rowBuckets.forEach((ids) => {
             if (ids.length < 2) {
                 return;
             }
-            const leftIds = ids.filter((id) => leftBranchAncestorSet.has(id));
-            const rightIds = ids.filter((id) => !leftBranchAncestorSet.has(id));
-            if (leftIds.length === 0 || rightIds.length === 0) {
+            // Branche gauche = ascendants du parent [0] ; droite = ascendants du parent [1].
+            // Exclusif gauche / exclusif droite / consanguinité (les deux) pour ne jamais
+            // mélanger deux lignées sur une chaîne triée par x (effet « un sur deux »).
+            const leftOnly = ids.filter(
+                (id) => leftBranchAncestorSet.has(id) && !rightBranchAncestorSet.has(id)
+            );
+            const rightOnly = ids.filter(
+                (id) => rightBranchAncestorSet.has(id) && !leftBranchAncestorSet.has(id)
+            );
+            const bothSides = ids.filter(
+                (id) => leftBranchAncestorSet.has(id) && rightBranchAncestorSet.has(id)
+            );
+            const neither = ids.filter(
+                (id) =>
+                    !leftBranchAncestorSet.has(id) &&
+                    !rightBranchAncestorSet.has(id) &&
+                    id !== selectedPersonId
+            );
+            const rootHere = ids.filter((id) => id === selectedPersonId);
+
+            const blocks = [];
+            if (leftOnly.length > 0) blocks.push(sortRowIdsByX(leftOnly));
+            if (bothSides.length > 0) blocks.push(sortRowIdsByX(bothSides));
+            if (rootHere.length > 0) blocks.push(sortRowIdsByX(rootHere));
+            if (neither.length > 0) blocks.push(sortRowIdsByX(neither));
+            if (rightOnly.length > 0) blocks.push(sortRowIdsByX(rightOnly));
+
+            if (blocks.length <= 1) {
                 const sorted = sortRowIdsByX(ids);
-                for (let i = 1; i < sorted.length; i++) {
-                    const prev = positions[sorted[i - 1]];
-                    const cur = positions[sorted[i]];
-                    const minX = prev.x + minDx;
-                    if (cur.x < minX) {
-                        cur.x = minX;
-                    }
-                }
+                const W = blockWidthForRow(sorted, gapBetweenCouples);
+                placeRowByMarriageGroupsFrom(sorted, gapBetweenCouples, -W / 2);
                 return;
             }
-            const leftSorted = sortRowIdsByX(leftIds);
-            const rightSorted = sortRowIdsByX(rightIds);
-            const nL = leftSorted.length;
-            const nR = rightSorted.length;
-            const spanL = nL > 0 ? (nL - 1) * minDx : 0;
-            const spanR = nR > 0 ? (nR - 1) * minDx : 0;
-            const total = spanL + betweenGap + spanR;
-            const left0 = -total / 2;
-            for (let i = 0; i < nL; i++) {
-                positions[leftSorted[i]].x = left0 + i * minDx;
-            }
-            const firstRightX = left0 + spanL + betweenGap;
-            for (let j = 0; j < nR; j++) {
-                positions[rightSorted[j]].x = firstRightX + j * minDx;
-            }
+
+            const gap = betweenGap;
+            const blockWidths = blocks.map((b) => blockWidthForRow(b, gapBetweenCouples));
+            const totalGaps = (blocks.length - 1) * gap;
+            const totalSpan = blockWidths.reduce((a, w) => a + w, 0) + totalGaps;
+            let cursor = -totalSpan / 2;
+            blocks.forEach((block, bi) => {
+                const W = blockWidths[bi];
+                placeRowByMarriageGroupsFrom(block, gapBetweenCouples, cursor);
+                cursor += W + (bi < blocks.length - 1 ? gap : 0);
+            });
         });
     }
 

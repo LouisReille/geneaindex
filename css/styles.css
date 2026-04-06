@@ -79,21 +79,254 @@ header {
     box-shadow: 0 2px 4px rgba(0,0,0,0.1);
 }
 
+/* Bloc « nom de famille » : le header force color:white sur les enfants ; on rétablit un contraste lisible. */
+#familyControls .family-result-panel {
+    margin-top: 1rem;
+    padding: 1rem;
+    background: #f0f4f8;
+    border: 1px solid rgba(255, 255, 255, 0.25);
+    border-radius: 6px;
+    color: #1a252f;
+}
+
+#familyControls .family-result-panel strong {
+    color: #0d1117;
+    font-weight: 600;
+}
+
+#familyControls #familyCount {
+    color: #1565c0;
+    font-weight: 600;
+}
+
+#familyControls .family-result-empty {
+    margin: 0;
+    color: #c0392b;
+    font-weight: 500;
+}
+
 .header-top {
     display: flex;
-    justify-content: space-between;
     align-items: center;
+    gap: 1rem;
+    flex-wrap: wrap;
     margin-bottom: 1rem;
 }
 
-h1 {
+.header-title {
+    flex: 0 0 auto;
     font-size: 1.5rem;
     margin: 0;
 }
 
 .main-menu {
+    flex: 1 1 auto;
+    display: flex;
+    justify-content: center;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+}
+
+/** Boutons ⬇ / ? à droite du bandeau de menus */
+.header-actions {
+    flex: 0 0 auto;
+    margin-left: auto;
     display: flex;
     gap: 0.5rem;
+    align-items: center;
+}
+
+.menu-help-btn {
+    flex: 0 0 auto;
+    width: 2rem;
+    height: 2rem;
+    padding: 0;
+    border-radius: 50%;
+    border: 2px solid rgba(255, 255, 255, 0.85);
+    background: rgba(255, 255, 255, 0.12);
+    color: white;
+    font-size: 1.05rem;
+    font-weight: 700;
+    line-height: 1;
+    cursor: pointer;
+    font-family: Georgia, 'Times New Roman', serif;
+    transition: background 0.2s, border-color 0.2s, transform 0.15s;
+}
+
+.menu-help-btn:hover {
+    background: rgba(255, 255, 255, 0.22);
+    border-color: white;
+}
+
+.menu-help-btn:focus-visible {
+    outline: 2px solid #3498db;
+    outline-offset: 2px;
+}
+
+/** Modale d’aide contextuelle (menu actif) */
+.menu-help-modal {
+    position: fixed;
+    inset: 0;
+    z-index: 10050;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 1rem;
+    box-sizing: border-box;
+}
+
+.menu-help-modal.hidden {
+    display: none !important;
+}
+
+.menu-help-backdrop {
+    position: absolute;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.45);
+    cursor: pointer;
+}
+
+.menu-help-dialog {
+    position: relative;
+    z-index: 1;
+    max-width: 32rem;
+    width: 100%;
+    max-height: min(85vh, 28rem);
+    overflow: auto;
+    background: #fff;
+    color: #2c3e50;
+    border-radius: 10px;
+    box-shadow: 0 12px 40px rgba(0, 0, 0, 0.25);
+}
+
+.menu-help-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+    padding: 1rem 1rem 0.5rem;
+    border-bottom: 1px solid #e8ecf0;
+}
+
+.menu-help-heading {
+    margin: 0;
+    font-size: 1.2rem;
+    font-weight: 600;
+    color: #1a252f;
+}
+
+.menu-help-close {
+    flex-shrink: 0;
+    width: 2.25rem;
+    height: 2.25rem;
+    border: none;
+    border-radius: 6px;
+    background: #ecf0f1;
+    color: #2c3e50;
+    font-size: 1.5rem;
+    line-height: 1;
+    cursor: pointer;
+    transition: background 0.2s;
+}
+
+.menu-help-close:hover {
+    background: #dfe6e9;
+}
+
+.menu-help-body {
+    padding: 1rem 1.25rem 1.25rem;
+    font-size: 0.95rem;
+    line-height: 1.55;
+}
+
+.menu-help-body p {
+    margin: 0 0 0.75rem;
+}
+
+.menu-help-body p:last-child {
+    margin-bottom: 0;
+}
+
+.menu-help-body ul {
+    margin: 0.35rem 0 0.75rem 1.1rem;
+    padding: 0;
+}
+
+.menu-help-body li {
+    margin-bottom: 0.35rem;
+}
+
+.download-dialog {
+    max-width: 36rem;
+}
+
+.download-modal-body .download-intro {
+    margin: 0 0 1rem;
+    color: #37474f;
+}
+
+.download-row {
+    margin-bottom: 0.75rem;
+    padding: 0.65rem 0.75rem;
+    background: #f7f9fb;
+    border-radius: 6px;
+    border: 1px solid #e8ecf0;
+}
+
+.download-row:last-of-type {
+    margin-bottom: 0;
+}
+
+.download-row-title {
+    font-weight: 600;
+    color: #1a252f;
+    margin-bottom: 0.35rem;
+    font-size: 0.95rem;
+}
+
+.download-row-file {
+    font-size: 0.88rem;
+    word-break: break-all;
+}
+
+.download-row-file a {
+    color: #1565c0;
+    font-weight: 600;
+    text-decoration: none;
+}
+
+.download-row-file a:hover {
+    text-decoration: underline;
+}
+
+.download-filename {
+    color: #546e7a;
+    font-weight: 500;
+}
+
+.download-hint {
+    font-size: 0.82rem;
+    color: #546e7a;
+    margin-top: 0.35rem;
+    line-height: 1.45;
+}
+
+.download-notice {
+    font-size: 0.85rem;
+    color: #5d4037;
+    background: #fff8e1;
+    border: 1px solid #ffe082;
+    border-radius: 6px;
+    padding: 0.65rem 0.75rem;
+    margin-top: 1rem;
+    line-height: 1.5;
+}
+
+.download-notice code {
+    font-size: 0.8rem;
+    background: rgba(255, 255, 255, 0.7);
+    padding: 0.1rem 0.3rem;
+    border-radius: 3px;
 }
 
 .menu-item {
@@ -129,6 +362,38 @@ h1 {
     flex-wrap: wrap;
 }
 
+/* Panneau clair sous le header (héritage de color: white annulé) */
+.lca-result-panel {
+    margin-top: 1rem;
+    padding: 1rem 1.1rem;
+    background: #f8f9fa;
+    border: 1px solid #dee2e6;
+    border-radius: 6px;
+    color: #2c3e50;
+    font-size: 0.95rem;
+    line-height: 1.45;
+}
+
+.lca-result-panel strong {
+    color: #1a252f;
+    font-weight: 600;
+}
+
+.lca-result-panel .lca-result-names {
+    color: #2c3e50;
+}
+
+.lca-result-panel .lca-result-distance {
+    display: block;
+    margin-top: 0.5rem;
+    color: #5d6d7e;
+    font-size: 0.88rem;
+}
+
+.lca-result-panel--empty strong {
+    color: #c0392b;
+}
+
 #linkControls p {
     color: #ecf0f1;
     font-size: 0.9rem;
@@ -157,32 +422,6 @@ input[type="file"] {
 
 .file-label:hover {
     background: #2980b9;
-}
-
-.info {
-    color: #ecf0f1;
-    font-size: 0.9rem;
-}
-
-.stats {
-    display: flex;
-    gap: 2rem;
-    margin-top: 0.5rem;
-}
-
-.stat {
-    display: flex;
-    flex-direction: column;
-}
-
-.stat-value {
-    font-size: 1.2rem;
-    font-weight: bold;
-}
-
-.stat-label {
-    font-size: 0.8rem;
-    opacity: 0.8;
 }
 
 main {
@@ -284,26 +523,11 @@ main {
     position: relative;
 }
 
-.descendants-gen-field {
-    display: flex;
-    flex-direction: column;
-    gap: 0.25rem;
-}
-
 .descendants-label {
     display: block;
     margin-bottom: 0.25rem;
     font-size: 0.85rem;
     color: #666;
-}
-
-.descendants-gen-select {
-    padding: 0.5rem 0.75rem;
-    font-size: 1rem;
-    border: 1px solid #ccc;
-    border-radius: 4px;
-    background: #fff;
-    min-width: 4.5rem;
 }
 
 /* Ensure vis-network labels are visible */
@@ -447,39 +671,6 @@ main {
     box-shadow: 0 4px 6px rgba(0,0,0,0.1);
 }
 
-.legend {
-    display: flex;
-    gap: 1rem;
-    margin-top: 0.5rem;
-    flex-wrap: wrap;
-}
-
-.legend-item {
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-    font-size: 0.85rem;
-}
-
-.legend-color {
-    width: 20px;
-    height: 20px;
-    border-radius: 3px;
-    border: 1px solid #ddd;
-}
-
-.legend-color-individual {
-    background: #3498db;
-}
-
-.legend-color-marriage {
-    background: #e74c3c;
-}
-
-.legend-color-parent-child {
-    background: #27ae60;
-}
-
 .hidden {
     display: none !important;
 }
@@ -492,6 +683,7 @@ main {
 
 #personSearch,
 #linkPersonSearch,
+#descendantsPersonSearch,
 #lcaPerson1Search,
 #lcaPerson2Search,
 #familyNameSearch {
@@ -506,6 +698,7 @@ main {
 
 #personSearch:focus,
 #linkPersonSearch:focus,
+#descendantsPersonSearch:focus,
 #lcaPerson1Search:focus,
 #lcaPerson2Search:focus,
 #familyNameSearch:focus {

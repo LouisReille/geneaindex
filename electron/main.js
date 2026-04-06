@@ -1,5 +1,8 @@
 const { app, BrowserWindow } = require('electron');
 const path = require('path');
+const fs = require('fs');
+
+const iconPath = path.join(__dirname, '..', 'assets', 'icon.png');
 
 function createWindow() {
     const win = new BrowserWindow({
@@ -7,6 +10,7 @@ function createWindow() {
         height: 800,
         minWidth: 800,
         minHeight: 600,
+        icon: fs.existsSync(iconPath) ? iconPath : undefined,
         webPreferences: {
             nodeIntegration: false,
             contextIsolation: true,

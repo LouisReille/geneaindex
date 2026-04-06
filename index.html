@@ -13,7 +13,7 @@
 <body>
     <header>
         <div class="header-top">
-            <h1>🌳 Geneaindex</h1>
+            <h1 class="header-title">🌳 Geneaindex</h1>
             <nav class="main-menu">
                 <button class="menu-item active" data-menu="tree">👥 Ancêtres</button>
                 <button class="menu-item" data-menu="descendants">👶 Descendants</button>
@@ -21,6 +21,10 @@
                 <button class="menu-item" data-menu="lca">👥 Ancêtre commun</button>
                 <button class="menu-item" data-menu="family">👨‍👩‍👧‍👦 Nom de famille</button>
             </nav>
+            <div class="header-actions">
+                <button type="button" id="downloadBtn" class="menu-help-btn" title="Télécharger l’application" aria-label="Télécharger l’application">⬇</button>
+                <button type="button" id="menuHelpBtn" class="menu-help-btn" title="Aide sur ce menu" aria-label="Aide sur ce menu">?</button>
+            </div>
         </div>
         <div class="controls" id="treeControls">
             <div class="file-input-wrapper hidden">
@@ -37,15 +41,6 @@
                         <label class="descendants-label" for="descendantsPersonSearch">Personne de départ</label>
                         <input type="text" id="descendantsPersonSearch" placeholder="🔍 Rechercher une personne…" autocomplete="off">
                         <div id="descendantsSearchResults" class="search-results"></div>
-                    </div>
-                    <div class="descendants-gen-field">
-                        <label class="descendants-label" for="descendantsGenSelect">Générations descendantes</label>
-                        <select id="descendantsGenSelect" class="descendants-gen-select">
-                            <option value="2">2</option>
-                            <option value="3" selected>3</option>
-                            <option value="4">4</option>
-                            <option value="5">5</option>
-                        </select>
                     </div>
                 </div>
             </div>
@@ -71,39 +66,9 @@
                 <input type="text" id="familyNameSearch" placeholder="🔍 Rechercher un nom de famille…" autocomplete="off">
                 <div id="familyNameResults" class="search-results"></div>
             </div>
-            <div class="info">
-                <div class="stats">
-                    <div class="stat">
-                        <span class="stat-value" id="individualCount">0</span>
-                        <span class="stat-label">Personnes</span>
-                    </div>
-                    <div class="stat">
-                        <span class="stat-value" id="relationshipCount">0</span>
-                        <span class="stat-label">Liens</span>
-                    </div>
-                    <div class="stat">
-                        <span class="stat-value" id="plancheCount">0</span>
-                        <span class="stat-label">Planches</span>
-                    </div>
-                </div>
-            </div>
-        </div>
-        <div class="legend" id="treeLegend">
-            <div class="legend-item">
-                <div class="legend-color legend-color-individual"></div>
-                <span>Personne</span>
-            </div>
-            <div class="legend-item">
-                <div class="legend-color legend-color-marriage"></div>
-                <span>Mariage</span>
-            </div>
-            <div class="legend-item">
-                <div class="legend-color legend-color-parent-child"></div>
-                <span>Parent–enfant</span>
-            </div>
         </div>
         <div class="controls hidden" id="descendantsControls">
-            <p>Descendants sur 2 à 5 générations sous la personne choisie (enfants, petits-enfants, etc.). Les conjoints liés par un mariage sont inclus lorsqu’ils sont dans le sous-arbre.</p>
+            <p>Descendants sur 3 générations maximum sous la personne choisie. Les parents restent visibles au-dessus pour naviguer vers le haut même sans descendants. Les conjoints liés par un mariage sont inclus lorsqu’ils sont dans le sous-arbre.</p>
         </div>
         <div class="controls hidden" id="linkControls">
             <p>Arbre complet : toutes les personnes, par génération. Utilisez le bouton au centre de la zone pour lancer le chargement.</p>
@@ -115,14 +80,15 @@
         </div>
         <div class="controls hidden" id="lcaControls">
             <p>Trouver l’ancêtre commun le plus récent entre deux personnes</p>
-            <div id="lcaResult" style="margin-top: 1rem; padding: 1rem; background: #f8f9fa; border-radius: 4px; display: none;">
-                <strong>Ancêtre commun :</strong> <span id="lcaResultName"></span>
-            </div>
+            <div id="lcaResult" class="lca-result-panel" style="display: none;" aria-live="polite"></div>
         </div>
         <div class="controls hidden" id="familyControls">
             <p>Relations entre personnes portant le même nom de famille</p>
-            <div id="familyResult" style="margin-top: 1rem; padding: 1rem; background: #f8f9fa; border-radius: 4px; display: none;">
-                <strong>Trouvé :</strong> <span id="familyCount">0</span> personne(s) avec ce nom
+            <div id="familyResult" class="family-result-panel" style="display: none;" aria-live="polite">
+                <p id="familyResultOk" class="family-result-ok">
+                    <strong>Trouvé :</strong> <span id="familyCount">0</span> personne(s) avec ce nom
+                </p>
+                <p id="familyResultEmpty" class="family-result-empty hidden" role="alert"></p>
             </div>
         </div>
     </header>
@@ -161,6 +127,26 @@
         <div class="error hidden" id="error"></div>
         <div class="person-popup hidden" id="personPopup">
             <div class="person-popup-content" id="personPopupContent"></div>
+        </div>
+        <div id="menuHelpModal" class="menu-help-modal hidden" aria-hidden="true">
+            <div class="menu-help-backdrop" data-menu-help-close="1"></div>
+            <div class="menu-help-dialog" role="dialog" aria-modal="true" aria-labelledby="menuHelpTitle">
+                <div class="menu-help-header">
+                    <h2 id="menuHelpTitle" class="menu-help-heading">Aide</h2>
+                    <button type="button" class="menu-help-close" id="menuHelpCloseBtn" aria-label="Fermer">×</button>
+                </div>
+                <div class="menu-help-body" id="menuHelpBody"></div>
+            </div>
+        </div>
+        <div id="downloadModal" class="menu-help-modal download-modal hidden" aria-hidden="true">
+            <div class="menu-help-backdrop" data-download-close="1"></div>
+            <div class="menu-help-dialog download-dialog" role="dialog" aria-modal="true" aria-labelledby="downloadModalTitle">
+                <div class="menu-help-header">
+                    <h2 id="downloadModalTitle" class="menu-help-heading">Télécharger Geneaindex</h2>
+                    <button type="button" class="menu-help-close" id="downloadCloseBtn" aria-label="Fermer">×</button>
+                </div>
+                <div class="menu-help-body download-modal-body" id="downloadModalBody"></div>
+            </div>
         </div>
     </main>
 

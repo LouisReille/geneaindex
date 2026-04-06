@@ -3,14 +3,88 @@
 /** Incrémenté à chaque rebuild descendants : annule les builds obsolètes (ex. changement rapide du select). */
 let descendantsBuildGeneration = 0;
 
+/** Incrémenté à chaque rebuild nom de famille : évite d’afficher un graphe périmé si l’utilisateur change vite. */
+let familyNameBuildGeneration = 0;
+
+/** Nombre maximum de générations descendantes (enfants → petits-enfants → arrière-petits-enfants). Pas plus loin. */
+const DESCENDANTS_MAX_GENERATIONS = 3;
+
+const MENU_GRAPH_KEYS = ['tree', 'descendants', 'link', 'lca', 'family'];
+
+function persistMenuGraph(menuKey) {
+    if (!MENU_GRAPH_KEYS.includes(menuKey)) return;
+    if (menuKey === 'link' && AppState.linkTreeLoading) return;
+    if (!AppState.nodes || !AppState.edges) return;
+    const entry = {
+        nodes: AppState.nodes,
+        edges: AppState.edges,
+        positions: AppState.positions && typeof AppState.positions === 'object' ? AppState.positions : {},
+        rootPersonId: AppState.rootPersonId
+    };
+    if (menuKey === 'descendants') {
+        entry.descendantsRootId = AppState.descendantsRootId;
+        entry.descendantsMaxGenerations = DESCENDANTS_MAX_GENERATIONS;
+        const del = document.getElementById('descendantsPersonSearch');
+        entry.descendantsSearchDisplay = del ? del.value : '';
+    }
+    if (menuKey === 'tree') {
+        const pel = document.getElementById('personSearch');
+        entry.personSearchDisplay = pel ? pel.value : '';
+    }
+    if (menuKey === 'lca') {
+        entry.lcaPerson1Id = typeof lcaPerson1 !== 'undefined' && lcaPerson1 ? lcaPerson1.id : null;
+        entry.lcaPerson2Id = typeof lcaPerson2 !== 'undefined' && lcaPerson2 ? lcaPerson2.id : null;
+    }
+    if (menuKey === 'family') {
+        entry.familyName = typeof selectedFamilyName !== 'undefined' ? selectedFamilyName : null;
+    }
+    AppState.menuGraphCache[menuKey] = entry;
+}
+
+function restoreMenuGraph(menuKey) {
+    if (!MENU_GRAPH_KEYS.includes(menuKey)) {
+        AppState.nodes = null;
+        AppState.edges = null;
+        AppState.positions = null;
+        return false;
+    }
+    const slot = AppState.menuGraphCache[menuKey];
+    if (slot && slot.nodes && slot.edges) {
+        AppState.nodes = slot.nodes;
+        AppState.edges = slot.edges;
+        AppState.positions = slot.positions || {};
+        AppState.rootPersonId = slot.rootPersonId != null ? slot.rootPersonId : null;
+        if (menuKey === 'descendants') {
+            AppState.descendantsRootId = slot.descendantsRootId != null ? slot.descendantsRootId : null;
+            AppState.descendantsMaxGenerations = DESCENDANTS_MAX_GENERATIONS;
+        } else {
+            AppState.descendantsRootId = null;
+        }
+        return true;
+    }
+    AppState.nodes = null;
+    AppState.edges = null;
+    AppState.positions = null;
+    AppState.descendantsRootId = null;
+    return false;
+}
+
 function loadTreeData(data) {
     AppState.treeData = data;
+    AppState.menuGraphCache = {
+        tree: null,
+        descendants: null,
+        link: null,
+        lca: null,
+        family: null
+    };
+    AppState.linkTreeBuilt = false;
+    AppState.linkTreeLoading = false;
     showLoading();
     
     try {
         // Show search wrappers after data is loaded (will be shown/hidden based on menu)
         // Don't build tree automatically - wait for user to search
-        updateStats(data);
         hideLoading();
         
         // Debug: Log data structure
@@ -114,6 +188,7 @@ function buildTree(data, rootPersonId) {
         
         // Create network with pre-calculated positions (no generation grid)
         createNetwork(AppState.nodes, AppState.edges, positions);
+        persistMenuGraph('tree');
         
         hideLoading();
     } catch (error) {
@@ -123,6 +198,7 @@ function buildTree(data, rootPersonId) {
     }
 }
 
+/** Descendants par BFS parent→enfant uniquement (pas de fermeture mariage : elle serait transitive sur tout le graphe). */
 function collectDescendantPersonIds(rootPersonId, maxGenerations, relationships) {
     const queue = [[rootPersonId, 0]];
     const ids = new Set([rootPersonId]);
@@ -136,29 +212,82 @@ function collectDescendantPersonIds(rootPersonId, maxGenerations, relationships)
             }
         });
     }
-    let changed = true;
-    while (changed) {
-        changed = false;
-        relationships.forEach((rel) => {
-            if (rel.type === 'marriage') {
-                const a = rel.from;
-                const b = rel.to;
-                if (ids.has(a) && !ids.has(b)) {
-                    ids.add(b);
-                    changed = true;
-                } else if (ids.has(b) && !ids.has(a)) {
-                    ids.add(a);
-                    changed = true;
+    return ids;
+}
+
+/** Parents, grands-parents, etc. (remontée) sur `depthUp` niveaux depuis `personId`. */
+function collectAncestorPersonIds(personId, depthUp, relationships) {
+    const out = new Set();
+    let frontier = new Set([personId]);
+    for (let d = 0; d < depthUp; d++) {
+        const next = new Set();
+        frontier.forEach((id) => {
+            relationships.forEach((rel) => {
+                if (rel.type === 'parent-child' && rel.to === id) {
+                    const p = rel.from;
+                    if (!out.has(p)) out.add(p);
+                    next.add(p);
                 }
+            });
+        });
+        frontier = next;
+        if (next.size === 0) break;
+    }
+    return out;
+}
+
+/**
+ * Remonte les parent→enfant depuis la racine : profondeur 0 = racine, 1 = enfants, etc.
+ * Garde uniquement les ids dont la profondeur descendant max ≤ maxDepth (hors racine non concernée).
+ */
+function pruneDescendantsBeyondDepth(rootPersonId, ids, relationships, maxDepth) {
+    const depthMap = new Map([[rootPersonId, 0]]);
+    const queue = [rootPersonId];
+    let qi = 0;
+    while (qi < queue.length) {
+        const id = queue[qi++];
+        const d = depthMap.get(id);
+        if (d >= maxDepth) continue;
+        relationships.forEach((rel) => {
+            if (rel.type === 'parent-child' && rel.from === id && !depthMap.has(rel.to)) {
+                depthMap.set(rel.to, d + 1);
+                queue.push(rel.to);
             }
         });
     }
+    const toRemove = [];
+    ids.forEach((id) => {
+        if (id === rootPersonId) return;
+        if (!depthMap.has(id)) return;
+        if (depthMap.get(id) > maxDepth) toRemove.push(id);
+    });
+    toRemove.forEach((id) => ids.delete(id));
+}
+
+/**
+ * Descendants (max générations) + parents (1 génération au-dessus) pour remonter sans être bloqué.
+ * Conjoints : une seule passe, uniquement si l’autre extrémité est dans le noyau (descendants BFS ∪ ancêtres).
+ * Pas de fermeture transitive des mariages (sinon composante géante → chargement infini / crash mémoire).
+ */
+function collectDescendantsViewPersonIds(rootPersonId, maxGenerations, relationships) {
+    const maxGen = Math.min(DESCENDANTS_MAX_GENERATIONS, Math.max(1, Number(maxGenerations) || DESCENDANTS_MAX_GENERATIONS));
+    const down = collectDescendantPersonIds(rootPersonId, maxGen, relationships);
+    const up = collectAncestorPersonIds(rootPersonId, 1, relationships);
+    const base = new Set(down);
+    up.forEach((id) => base.add(id));
+    const ids = new Set(base);
+    relationships.forEach((rel) => {
+        if (rel.type !== 'marriage') return;
+        const a = rel.from;
+        const b = rel.to;
+        if (base.has(a) && !ids.has(b)) ids.add(b);
+        else if (base.has(b) && !ids.has(a)) ids.add(a);
+    });
+    pruneDescendantsBeyondDepth(rootPersonId, ids, relationships, maxGen);
     return ids;
 }
 
 function buildDescendantsTree(data, rootPersonId, maxGenerations) {
-    const genSelectEl = document.getElementById('descendantsGenSelect');
-
     if (!rootPersonId) {
         descendantsBuildGeneration += 1;
         if (AppState.network) {
@@ -171,11 +300,10 @@ function buildDescendantsTree(data, rootPersonId, maxGenerations) {
         AppState.rootPersonId = null;
         AppState.descendantsRootId = null;
         AppState.positions = null;
-        if (genSelectEl) genSelectEl.disabled = false;
         return;
     }
 
-    const n = Math.min(5, Math.max(2, parseInt(maxGenerations, 10) || 3));
+    const n = DESCENDANTS_MAX_GENERATIONS;
     AppState.descendantsMaxGenerations = n;
     AppState.descendantsRootId = rootPersonId;
 
@@ -183,7 +311,6 @@ function buildDescendantsTree(data, rootPersonId, maxGenerations) {
     const buildId = descendantsBuildGeneration;
 
     showLoading();
-    if (genSelectEl) genSelectEl.disabled = true;
 
     (async () => {
         try {
@@ -199,7 +326,7 @@ function buildDescendantsTree(data, rootPersonId, maxGenerations) {
 
             const individuals = data.individuals || [];
             const relationships = data.relationships || [];
-            const peopleToShow = collectDescendantPersonIds(rootPersonId, n, relationships);
+            const peopleToShow = collectDescendantsViewPersonIds(rootPersonId, n, relationships);
 
             const filteredIndividuals = individuals.filter((person) => peopleToShow.has(person.id));
             const filteredRelationships = relationships.filter((rel) => {
@@ -251,6 +378,7 @@ function buildDescendantsTree(data, rootPersonId, maxGenerations) {
 
             if (buildId !== descendantsBuildGeneration) return;
             createNetwork(AppState.nodes, AppState.edges, positions);
+            persistMenuGraph('descendants');
         } catch (error) {
             if (buildId === descendantsBuildGeneration) {
                 showError('Erreur (descendants) : ' + error.message);
@@ -259,7 +387,6 @@ function buildDescendantsTree(data, rootPersonId, maxGenerations) {
         } finally {
             if (buildId === descendantsBuildGeneration) {
                 hideLoading();
-                if (genSelectEl) genSelectEl.disabled = false;
             }
         }
     })();
@@ -353,16 +480,8 @@ function hideDescendantsSearchResults() {
     if (resultsDiv) resultsDiv.classList.remove('active');
 }
 
-function getDescendantsMaxGenerationsSelect() {
-    const sel = document.getElementById('descendantsGenSelect');
-    if (!sel) return 3;
-    const v = parseInt(sel.value, 10);
-    return Number.isFinite(v) ? Math.min(5, Math.max(2, v)) : 3;
-}
-
 function setupDescendantsSearch(data) {
     const searchInput = document.getElementById('descendantsPersonSearch');
-    const genSelect = document.getElementById('descendantsGenSelect');
     if (!searchInput) return;
 
     const individuals = data.individuals || [];
@@ -370,8 +489,7 @@ function setupDescendantsSearch(data) {
 
     const runBuild = (personId) => {
         if (!personId || !AppState.treeData) return;
-        const maxG = getDescendantsMaxGenerationsSelect();
-        buildDescendantsTree(AppState.treeData, personId, maxG);
+        buildDescendantsTree(AppState.treeData, personId, DESCENDANTS_MAX_GENERATIONS);
     };
 
     const onPick = (person) => {
@@ -412,13 +530,6 @@ function setupDescendantsSearch(data) {
         if (e.key === 'Escape') hideDescendantsSearchResults();
     });
 
-    if (genSelect) {
-        genSelect.addEventListener('change', () => {
-            if (AppState.descendantsRootId && AppState.treeData) {
-                runBuild(AppState.descendantsRootId);
-            }
-        });
-    }
 }
 
 function displayLinkSearchResults(results, onSelect) {
@@ -658,6 +769,47 @@ function checkAndBuildLCA(data) {
     }
 }
 
+function escapeHtmlText(text) {
+    return String(text)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;');
+}
+
+function personDisplayNameForLca(person) {
+    if (!person) return '';
+    const s = (person.fullName || `${person.firstName || ''} ${person.lastName || ''}`.trim()).trim();
+    return s || person.id;
+}
+
+function generationsCountFr(n) {
+    const k = Math.floor(Math.abs(Number(n))) || 0;
+    if (k <= 1) return `${k} génération`;
+    return `${k} générations`;
+}
+
+/** Parents des enfants situés juste sous l’A.C. sur chaque branche (couple à cette génération). */
+function getLcaGenerationAncestorIds(path1, path2, lcaId, childToParents, individuals) {
+    const ids = new Set();
+    if (path1.length >= 2) {
+        (childToParents.get(path1[path1.length - 2]) || []).forEach((id) => ids.add(id));
+    }
+    if (path2.length >= 2) {
+        (childToParents.get(path2[path2.length - 2]) || []).forEach((id) => ids.add(id));
+    }
+    if (!ids.has(lcaId)) ids.add(lcaId);
+    const arr = Array.from(ids);
+    arr.sort((a, b) => {
+        if (a === lcaId) return -1;
+        if (b === lcaId) return 1;
+        const na = personDisplayNameForLca(individuals.find((x) => x.id === a));
+        const nb = personDisplayNameForLca(individuals.find((x) => x.id === b));
+        return na.localeCompare(nb, 'fr', { sensitivity: 'base' });
+    });
+    return arr;
+}
+
 function buildLCATree(data, person1Id, person2Id) {
     if (!data || !person1Id || !person2Id) {
         return;
@@ -676,29 +828,55 @@ function buildLCATree(data, person1Id, person2Id) {
             hideLoading();
             const resultDiv = document.getElementById('lcaResult');
             if (resultDiv) {
+                resultDiv.className = 'lca-result-panel lca-result-panel--empty';
                 resultDiv.style.display = 'block';
-                resultDiv.innerHTML = '<strong style="color: #e74c3c;">Aucun ancêtre commun trouvé</strong>';
+                resultDiv.innerHTML = '<strong>Aucun ancêtre commun trouvé</strong>';
             }
             return;
         }
-        
-        // Display LCA result
-        const lcaPerson = individuals.find(p => p.id === lcaResult.lcaId);
+
+        const childToParentsFull = buildChildToParentsMap(relationships);
+        const genIds = getLcaGenerationAncestorIds(
+            lcaResult.path1,
+            lcaResult.path2,
+            lcaResult.lcaId,
+            childToParentsFull,
+            individuals
+        );
+
         const resultDiv = document.getElementById('lcaResult');
-        const resultNameDiv = document.getElementById('lcaResultName');
-        if (resultDiv && resultNameDiv && lcaPerson) {
+        if (resultDiv) {
+            resultDiv.className = 'lca-result-panel';
             resultDiv.style.display = 'block';
-            resultNameDiv.textContent = lcaPerson.fullName || `${lcaPerson.firstName || ''} ${lcaPerson.lastName || ''}`.trim();
+            const label =
+                genIds.length <= 1
+                    ? 'Ancêtre commun le plus récent :'
+                    : 'Ancêtres communs (cette génération) :';
+            const namesLine = genIds
+                .map((id) => {
+                    const p = individuals.find((x) => x.id === id);
+                    return escapeHtmlText(personDisplayNameForLca(p) || id);
+                })
+                .join(' · ');
+            const p1Label = escapeHtmlText(
+                personDisplayNameForLca(individuals.find((x) => x.id === person1Id)) || 'personne 1'
+            );
+            const p2Label = escapeHtmlText(
+                personDisplayNameForLca(individuals.find((x) => x.id === person2Id)) || 'personne 2'
+            );
             resultDiv.innerHTML = `
-                <strong>Ancêtre commun :</strong> <span id="lcaResultName">${resultNameDiv.textContent}</span><br>
-                <small style="color: #666;">Distance : ${lcaResult.distance1} génération(s) depuis la personne 1, ${lcaResult.distance2} génération(s) depuis la personne 2</small>
+                <strong>${label}</strong> <span class="lca-result-names">${namesLine}</span>
+                <small class="lca-result-distance">Distance : ${generationsCountFr(lcaResult.distance1)} depuis ${p1Label}, ${generationsCountFr(lcaResult.distance2)} depuis ${p2Label}</small>
             `;
         }
         
-        // Collect all people to show (both paths + LCA)
+        // Collect all people to show (both paths + LCA + co-parents : 2e parent quand il existe)
         const peopleToShow = new Set();
         lcaResult.path1.forEach(id => peopleToShow.add(id));
         lcaResult.path2.forEach(id => peopleToShow.add(id));
+        collectCoParentIdsForLCAPaths(lcaResult.path1, lcaResult.path2, childToParentsFull).forEach((id) =>
+            peopleToShow.add(id)
+        );
         
         const filteredIndividuals = individuals.filter(person => peopleToShow.has(person.id));
         const filteredRelationships = relationships.filter(rel => 
@@ -721,13 +899,15 @@ function buildLCATree(data, person1Id, person2Id) {
             lcaResult.path2,
             lcaResult.lcaId,
             person1Id,
-            person2Id
+            person2Id,
+            childToParentsFull
         );
         
         AppState.positions = positions;
         
         // Create network
         createNetwork(AppState.nodes, AppState.edges, positions);
+        persistMenuGraph('lca');
         
         hideLoading();
     } catch (error) {
@@ -875,110 +1055,207 @@ function hideFamilyNameResults() {
     }
 }
 
+/** @param {{ count?: number, emptyMessage?: string }} state */
+function setFamilyResultPanel(state) {
+    const resultDiv = document.getElementById('familyResult');
+    const okLine = document.getElementById('familyResultOk');
+    const emptyLine = document.getElementById('familyResultEmpty');
+    const countSpan = document.getElementById('familyCount');
+    if (!resultDiv) return;
+    resultDiv.style.display = 'block';
+    if (state.emptyMessage != null && state.emptyMessage !== '') {
+        if (okLine) okLine.classList.add('hidden');
+        if (emptyLine) {
+            emptyLine.textContent = state.emptyMessage;
+            emptyLine.classList.remove('hidden');
+        }
+    } else {
+        if (emptyLine) emptyLine.classList.add('hidden');
+        if (okLine) okLine.classList.remove('hidden');
+        if (countSpan != null && typeof state.count === 'number') {
+            countSpan.textContent = String(state.count);
+        }
+    }
+}
+
 function buildFamilyNameTree(data, familyName) {
     if (!data || !familyName) {
         return;
     }
-    
+
+    familyNameBuildGeneration += 1;
+    const buildId = familyNameBuildGeneration;
+
     showLoading();
-    
-    try {
-        const individuals = data.individuals || [];
-        const relationships = data.relationships || [];
-        
-        // Normalize family name for comparison
-        const normalizeString = (str) => {
-            if (!str) return '';
-            return str.toLowerCase()
-                .normalize('NFD')
-                .replace(/[\u0300-\u036f]/g, '')
-                .trim();
-        };
-        
-        const normalizedFamilyName = normalizeString(familyName);
-        
-        // Filter individuals with matching family name
-        const matchingIndividuals = individuals.filter(person => {
-            const personLastName = normalizeString(person.lastName || '');
-            return personLastName === normalizedFamilyName;
+
+    requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+            setTimeout(() => {
+                (async () => {
+                    const normalizeString = (str) => {
+                        if (!str) return '';
+                        return str
+                            .toLowerCase()
+                            .normalize('NFD')
+                            .replace(/[\u0300-\u036f]/g, '')
+                            .trim();
+                    };
+
+                    try {
+                        await new Promise((r) => requestAnimationFrame(r));
+                        if (buildId !== familyNameBuildGeneration) return;
+
+                        const individuals = data.individuals || [];
+                        const relationships = data.relationships || [];
+                        const normalizedFamilyName = normalizeString(familyName);
+
+                        const matchingIndividuals = individuals.filter((person) => {
+                            const personLastName = normalizeString(person.lastName || '');
+                            return personLastName === normalizedFamilyName;
+                        });
+
+                        if (matchingIndividuals.length === 0) {
+                            hideLoading();
+                            if (buildId !== familyNameBuildGeneration) return;
+                            setFamilyResultPanel({ emptyMessage: 'Aucune personne avec ce nom de famille' });
+                            return;
+                        }
+
+                        const matchingIds = new Set(matchingIndividuals.map((p) => p.id));
+
+                        /**
+                         * Sous-graphe strict : uniquement les relations dont les deux extrémités
+                         * portent ce nom. Sinon une chaîne « un homonyme connaît X » ramenait tout le fichier.
+                         */
+                        const filteredRelationships = relationships.filter(
+                            (rel) => matchingIds.has(rel.from) && matchingIds.has(rel.to)
+                        );
+
+                        const filteredIndividuals = matchingIndividuals;
+
+                        const n = matchingIndividuals.length;
+                        if (buildId !== familyNameBuildGeneration) return;
+                        setFamilyResultPanel({ count: n });
+
+                        const loadingEl = document.getElementById('loading');
+                        if (loadingEl) {
+                            const firstP = loadingEl.querySelector('p');
+                            if (firstP) {
+                                firstP.textContent = `Traitement : ${n.toLocaleString('fr-FR')} personnes…`;
+                            }
+                        }
+
+                        if (AppState.network && !(AppState.currentMenu === 'link' && AppState.linkTreeBuilt)) {
+                            AppState.network.destroy();
+                            AppState.network = null;
+                        }
+                        document.getElementById('tree-container').innerHTML = '';
+
+                        await new Promise((r) => setTimeout(r, 0));
+                        if (buildId !== familyNameBuildGeneration) return;
+
+                        let nodeLevels;
+                        let marriages;
+                        if (typeof calculateLevelsAsync === 'function') {
+                            const result = await calculateLevelsAsync(
+                                filteredIndividuals,
+                                filteredRelationships,
+                                () => {}
+                            );
+                            nodeLevels = result.nodeLevels;
+                            marriages = result.marriages;
+                        } else {
+                            const result = calculateLevels(filteredIndividuals, filteredRelationships);
+                            nodeLevels = result.nodeLevels;
+                            marriages = result.marriages;
+                        }
+
+                        await new Promise((r) => setTimeout(r, 0));
+                        if (buildId !== familyNameBuildGeneration) return;
+
+                        let coupleGroups;
+                        let personToCoupleGroup;
+                        if (typeof groupCouplesAsync === 'function') {
+                            const result = await groupCouplesAsync(filteredRelationships, () => {});
+                            coupleGroups = result.coupleGroups;
+                            personToCoupleGroup = result.personToCoupleGroup;
+                        } else {
+                            const result = groupCouples(filteredRelationships);
+                            coupleGroups = result.coupleGroups;
+                            personToCoupleGroup = result.personToCoupleGroup;
+                        }
+
+                        const parentPairToChildren = groupParentChildren(filteredRelationships, marriages);
+
+                        await new Promise((r) => setTimeout(r, 0));
+                        if (buildId !== familyNameBuildGeneration) return;
+
+                        if (typeof createNodesAsync === 'function') {
+                            AppState.nodes = await createNodesAsync(
+                                filteredIndividuals,
+                                nodeLevels,
+                                personToCoupleGroup,
+                                () => {}
+                            );
+                        } else {
+                            AppState.nodes = createNodes(
+                                filteredIndividuals,
+                                nodeLevels,
+                                personToCoupleGroup
+                            );
+                        }
+
+                        await new Promise((r) => setTimeout(r, 0));
+                        if (buildId !== familyNameBuildGeneration) return;
+
+                        AppState.edges = createEdges(filteredRelationships, parentPairToChildren);
+
+                        const updatePosProgress = () => {};
+                        let positions;
+                        if (typeof calculateLinkPositionsAsync === 'function') {
+                            const positionBundle = await calculateLinkPositionsAsync(
+                                AppState.nodes,
+                                coupleGroups,
+                                personToCoupleGroup,
+                                parentPairToChildren,
+                                updatePosProgress,
+                                { familyNameLayout: true }
+                            );
+                            positions = positionBundle.positions;
+                        } else {
+                            const positionBundle = calculateLinkPositions(
+                                AppState.nodes,
+                                coupleGroups,
+                                personToCoupleGroup,
+                                parentPairToChildren,
+                                { familyNameLayout: true }
+                            );
+                            positions = positionBundle.positions;
+                        }
+
+                        await new Promise((r) => setTimeout(r, 0));
+                        if (buildId !== familyNameBuildGeneration) return;
+
+                        AppState.positions = positions;
+
+                        if (AppState.currentMenu === 'family') {
+                            createNetwork(AppState.nodes, AppState.edges, positions);
+                            persistMenuGraph('family');
+                        }
+                    } catch (error) {
+                        console.error('[buildFamilyNameTree] Error:', error);
+                        if (buildId === familyNameBuildGeneration) {
+                            showError('Erreur (nom de famille) : ' + error.message);
+                        }
+                    } finally {
+                        if (buildId === familyNameBuildGeneration) {
+                            hideLoading();
+                        }
+                    }
+                })();
+            }, 0);
         });
-        
-        if (matchingIndividuals.length === 0) {
-            hideLoading();
-            const resultDiv = document.getElementById('familyResult');
-            if (resultDiv) {
-                resultDiv.style.display = 'block';
-                resultDiv.innerHTML = '<strong style="color: #e74c3c;">Aucune personne avec ce nom de famille</strong>';
-            }
-            return;
-        }
-        
-        // Display count
-        const resultDiv = document.getElementById('familyResult');
-        const countDiv = document.getElementById('familyCount');
-        if (resultDiv && countDiv) {
-            resultDiv.style.display = 'block';
-            countDiv.textContent = matchingIndividuals.length;
-        }
-        
-        // Get IDs of matching individuals
-        const matchingIds = new Set(matchingIndividuals.map(p => p.id));
-        
-        // Filter relationships to only include those between matching individuals
-        // Also include relationships where at least one person has the family name
-        const filteredRelationships = relationships.filter(rel => {
-            // Include if both people have the family name
-            if (matchingIds.has(rel.from) && matchingIds.has(rel.to)) {
-                return true;
-            }
-            // Include if one person has the family name (to show connections)
-            if (matchingIds.has(rel.from) || matchingIds.has(rel.to)) {
-                return true;
-            }
-            return false;
-        });
-        
-        // Get all individuals involved in these relationships
-        const involvedIds = new Set();
-        filteredRelationships.forEach(rel => {
-            involvedIds.add(rel.from);
-            involvedIds.add(rel.to);
-        });
-        
-        const filteredIndividuals = individuals.filter(person => involvedIds.has(person.id));
-        
-        // Process data
-        const { nodeLevels, marriages } = calculateLevels(filteredIndividuals, filteredRelationships);
-        const { coupleGroups, personToCoupleGroup } = groupCouples(filteredRelationships);
-        const parentPairToChildren = groupParentChildren(filteredRelationships, marriages);
-        
-        // Create nodes and edges
-        AppState.nodes = createNodes(filteredIndividuals, nodeLevels, personToCoupleGroup);
-        AppState.edges = createEdges(filteredRelationships, parentPairToChildren);
-        
-        // Calculate positions using link positioning (generation-based layout)
-        // Use the synchronous version for smaller datasets
-        const positionResult = calculateLinkPositions(
-            AppState.nodes,
-            coupleGroups,
-            personToCoupleGroup,
-            parentPairToChildren,
-            { familyNameLayout: true }
-        );
-        // calculateLinkPositions returns { positions, generationYRange, generationYears, generationNumbers }
-        const positions = positionResult.positions;
-        
-        AppState.positions = positions;
-        
-        // Create network
-        createNetwork(AppState.nodes, AppState.edges, positions);
-        
-        hideLoading();
-    } catch (error) {
-        console.error('[buildFamilyNameTree] Error:', error);
-        showError('Erreur (nom de famille) : ' + error.message);
-        hideLoading();
-    }
+    });
 }
 
 function centerAndZoomOnPerson(personId) {
@@ -1375,6 +1652,12 @@ function buildLinkTree(data) {
                     );
         
                     AppState.linkTreeBuilt = true;
+                    AppState.menuGraphCache.link = {
+                        nodes: AppState.nodes,
+                        edges: AppState.edges,
+                        positions: AppState.positions,
+                        rootPersonId: AppState.rootPersonId
+                    };
 
                     const progressBarContainerEl = document.getElementById('progressBarContainer');
                     if (progressBarContainerEl) {
@@ -1414,46 +1697,31 @@ function updateProgress(percent, progressBarFill, progressText) {
 
 function switchMenu(menuName) {
     console.log('[switchMenu] Called with menuName:', menuName);
-    
-    // Update state FIRST so that any ongoing async operations can check and abort
+
+    const previousMenu = AppState.currentMenu;
+    persistMenuGraph(previousMenu);
+
     AppState.currentMenu = menuName;
     console.log('[switchMenu] State updated, currentMenu:', AppState.currentMenu);
-    
-    // Conserver les données de l’arbre complet pendant le chargement (arrière-plan) ou une fois terminé
-    const shouldPreserveLinkData = AppState.linkTreeLoading ||
-        (AppState.linkTreeBuilt && AppState.nodes && AppState.edges);
-    const isReturningToLink = menuName === 'link' && shouldPreserveLinkData;
-    
-    console.log('[switchMenu] isReturningToLink:', isReturningToLink, 'linkTreeBuilt:', AppState.linkTreeBuilt, 'network:', !!AppState.network, 'nodes:', !!AppState.nodes, 'edges:', !!AppState.edges);
-    
-    // Always destroy the vis.js network when switching menus (it will be recreated if needed)
+
     if (AppState.network) {
         console.log('[switchMenu] Destroying network (switching menus)');
         AppState.network.destroy();
         AppState.network = null;
     }
-    
-    // Clear container
+
     const treeContainerEl = document.getElementById('tree-container');
     if (treeContainerEl) {
         treeContainerEl.innerHTML = '';
     }
-    
-    // Only clear data if not preserving Link menu data
-    if (!shouldPreserveLinkData) {
-        AppState.nodes = null;
-        AppState.edges = null;
-        AppState.positions = null;
-    } else {
-        console.log('[switchMenu] Preserving Link menu data (nodes, edges, positions)');
-        // nodes, edges, and positions are preserved
-    }
-    
-    // Hide loading and progress bar when switching menus
+
+    restoreMenuGraph(menuName);
+
     hideLoading();
     const progressBarContainer = document.getElementById('progressBarContainer');
     if (progressBarContainer) {
         progressBarContainer.classList.add('hidden');
+        progressBarContainer.classList.remove('link-mode-progress');
     }
     
     // Update menu button states
@@ -1466,35 +1734,36 @@ function switchMenu(menuName) {
     });
     
     // Show/hide control sections
-    // Always show tree controls (stats) and legend for all menus
-    document.getElementById('treeControls').classList.remove('hidden');
-    document.getElementById('treeLegend').classList.remove('hidden');
+    const treeControlsEl = document.getElementById('treeControls');
+    if (treeControlsEl) treeControlsEl.classList.remove('hidden');
     
-    // Clear search inputs when switching menus
-    document.getElementById('personSearch').value = '';
-    hideSearchResults();
-    
-    // Reset LCA selections when switching menus
-    lcaPerson1 = null;
-    lcaPerson2 = null;
-    const lcaPerson1Search = document.getElementById('lcaPerson1Search');
-    const lcaPerson2Search = document.getElementById('lcaPerson2Search');
-    if (lcaPerson1Search) lcaPerson1Search.value = '';
-    if (lcaPerson2Search) lcaPerson2Search.value = '';
-    const lcaResult = document.getElementById('lcaResult');
-    if (lcaResult) lcaResult.style.display = 'none';
-    
-    // Reset family name selection when switching menus
-    selectedFamilyName = null;
-    const familyNameSearch = document.getElementById('familyNameSearch');
-    if (familyNameSearch) familyNameSearch.value = '';
-    const familyResult = document.getElementById('familyResult');
-    if (familyResult) familyResult.style.display = 'none';
-    
+    const personSearchEl = document.getElementById('personSearch');
     const descendantsSearchInput = document.getElementById('descendantsPersonSearch');
-    if (descendantsSearchInput) descendantsSearchInput.value = '';
-    hideDescendantsSearchResults();
-    AppState.descendantsRootId = null;
+    if (previousMenu === 'tree' && menuName !== 'tree') {
+        if (personSearchEl) personSearchEl.value = '';
+        hideSearchResults();
+    }
+    if (previousMenu === 'lca' && menuName !== 'lca') {
+        lcaPerson1 = null;
+        lcaPerson2 = null;
+        const lcaPerson1Search = document.getElementById('lcaPerson1Search');
+        const lcaPerson2Search = document.getElementById('lcaPerson2Search');
+        if (lcaPerson1Search) lcaPerson1Search.value = '';
+        if (lcaPerson2Search) lcaPerson2Search.value = '';
+        const lcaResult = document.getElementById('lcaResult');
+        if (lcaResult) lcaResult.style.display = 'none';
+    }
+    if (previousMenu === 'family' && menuName !== 'family') {
+        selectedFamilyName = null;
+        const familyNameSearch = document.getElementById('familyNameSearch');
+        if (familyNameSearch) familyNameSearch.value = '';
+        const familyResult = document.getElementById('familyResult');
+        if (familyResult) familyResult.style.display = 'none';
+    }
+    if (previousMenu === 'descendants' && menuName !== 'descendants') {
+        if (descendantsSearchInput) descendantsSearchInput.value = '';
+        hideDescendantsSearchResults();
+    }
     
     // Show/hide the appropriate search wrapper based on menu
     const searchWrapper = document.getElementById('searchWrapper');
@@ -1504,8 +1773,8 @@ function switchMenu(menuName) {
     const descendantsSearchWrapper = document.getElementById('descendantsSearchWrapper');
     
     const hideAllSearchWrappers = () => {
-        searchWrapper.classList.add('hidden');
-        linkSearchWrapper.classList.add('hidden');
+        if (searchWrapper) searchWrapper.classList.add('hidden');
+        if (linkSearchWrapper) linkSearchWrapper.classList.add('hidden');
         if (lcaSearchWrapper) lcaSearchWrapper.classList.add('hidden');
         if (familySearchWrapper) familySearchWrapper.classList.add('hidden');
         if (descendantsSearchWrapper) descendantsSearchWrapper.classList.add('hidden');
@@ -1513,10 +1782,10 @@ function switchMenu(menuName) {
     
     if (menuName === 'tree') {
         hideAllSearchWrappers();
-        searchWrapper.classList.remove('hidden');
+        if (searchWrapper) searchWrapper.classList.remove('hidden');
     } else if (menuName === 'link') {
         hideAllSearchWrappers();
-        linkSearchWrapper.classList.remove('hidden');
+        if (linkSearchWrapper) linkSearchWrapper.classList.remove('hidden');
     } else if (menuName === 'lca') {
         hideAllSearchWrappers();
         if (lcaSearchWrapper) lcaSearchWrapper.classList.remove('hidden');
@@ -1529,6 +1798,48 @@ function switchMenu(menuName) {
     } else {
         hideAllSearchWrappers();
     }
+
+    const individualsList = (AppState.treeData && AppState.treeData.individuals) ? AppState.treeData.individuals : [];
+    if (menuName === 'tree') {
+        const ct = AppState.menuGraphCache.tree;
+        if (personSearchEl && ct && typeof ct.personSearchDisplay === 'string') {
+            personSearchEl.value = ct.personSearchDisplay;
+        }
+    }
+    if (menuName === 'descendants') {
+        const cd = AppState.menuGraphCache.descendants;
+        if (descendantsSearchInput && cd && typeof cd.descendantsSearchDisplay === 'string') {
+            descendantsSearchInput.value = cd.descendantsSearchDisplay;
+        }
+    }
+    if (menuName === 'lca') {
+        const cl = AppState.menuGraphCache.lca;
+        const lcaPerson1Search = document.getElementById('lcaPerson1Search');
+        const lcaPerson2Search = document.getElementById('lcaPerson2Search');
+        if (cl && cl.lcaPerson1Id) {
+            lcaPerson1 = individualsList.find((p) => p.id === cl.lcaPerson1Id) || null;
+            if (lcaPerson1Search && lcaPerson1) {
+                lcaPerson1Search.value = lcaPerson1.fullName || `${lcaPerson1.firstName || ''} ${lcaPerson1.lastName || ''}`.trim();
+            }
+        }
+        if (cl && cl.lcaPerson2Id) {
+            lcaPerson2 = individualsList.find((p) => p.id === cl.lcaPerson2Id) || null;
+            if (lcaPerson2Search && lcaPerson2) {
+                lcaPerson2Search.value = lcaPerson2.fullName || `${lcaPerson2.firstName || ''} ${lcaPerson2.lastName || ''}`.trim();
+            }
+        }
+    }
+    if (menuName === 'family') {
+        const cf = AppState.menuGraphCache.family;
+        const familyNameSearch = document.getElementById('familyNameSearch');
+        if (cf && cf.familyName) {
+            selectedFamilyName = cf.familyName;
+            if (familyNameSearch) familyNameSearch.value = cf.familyName;
+        } else {
+            selectedFamilyName = null;
+            if (familyNameSearch) familyNameSearch.value = '';
+        }
+    }
     
     // Show mode-specific controls
     const linkControls = document.getElementById('linkControls');
@@ -1537,7 +1848,7 @@ function switchMenu(menuName) {
     const descendantsControls = document.getElementById('descendantsControls');
     
     // Hide all controls first
-    linkControls.classList.add('hidden');
+    if (linkControls) linkControls.classList.add('hidden');
     if (lcaControls) lcaControls.classList.add('hidden');
     if (familyControls) familyControls.classList.add('hidden');
     if (descendantsControls) descendantsControls.classList.add('hidden');
@@ -1546,7 +1857,7 @@ function switchMenu(menuName) {
     if (menuName === 'descendants') {
         if (descendantsControls) descendantsControls.classList.remove('hidden');
     } else if (menuName === 'link') {
-        linkControls.classList.remove('hidden');
+        if (linkControls) linkControls.classList.remove('hidden');
         // Update clear locks button visibility
         if (typeof updateClearLocksButton === 'function') {
             updateClearLocksButton();
@@ -1560,7 +1871,7 @@ function switchMenu(menuName) {
     // Show/hide main content areas
     const treeContainer = document.getElementById('tree-container');
     if (menuName === 'tree' || menuName === 'link' || menuName === 'lca' || menuName === 'family' || menuName === 'descendants') {
-        treeContainer.classList.remove('hidden');
+        if (treeContainer) treeContainer.classList.remove('hidden');
         
         // Hide progress bar if not in Link mode
         if (menuName !== 'link') {
@@ -1572,33 +1883,25 @@ function switchMenu(menuName) {
         
         // Menu Arbre complet : chargement uniquement via le bouton central (ou retour avec données prêtes)
         if (menuName === 'link' && AppState.treeData) {
-            console.log('[switchMenu] Checking Link tree status:', {
+            console.log('[switchMenu] Link menu:', {
                 linkTreeBuilt: AppState.linkTreeBuilt,
                 linkTreeLoading: AppState.linkTreeLoading,
-                hasNetwork: !!AppState.network,
-                hasNodes: !!AppState.nodes,
-                hasEdges: !!AppState.edges
+                hasCachedLink: !!(AppState.menuGraphCache.link && AppState.menuGraphCache.link.nodes)
             });
             
             if (AppState.linkTreeBuilt && AppState.nodes && AppState.edges && AppState.positions) {
                 hideLinkLoadPrompt();
                 hideLoading();
                 createNetwork(AppState.nodes, AppState.edges, AppState.positions);
-                if (treeContainerEl) {
-                    treeContainerEl.classList.remove('hidden');
-                }
+                if (treeContainer) treeContainer.classList.remove('hidden');
             } else if (AppState.linkTreeLoading) {
                 hideLinkLoadPrompt();
                 showLinkTreeLoadingResume();
-                if (treeContainerEl) {
-                    treeContainerEl.classList.remove('hidden');
-                }
+                if (treeContainer) treeContainer.classList.remove('hidden');
             } else {
                 hideLoading();
                 showLinkLoadPrompt();
-                if (treeContainerEl) {
-                    treeContainerEl.classList.remove('hidden');
-                }
+                if (treeContainer) treeContainer.classList.remove('hidden');
             }
             const clearAllLocksBtn = document.getElementById('clearAllLocks');
             if (clearAllLocksBtn) {
@@ -1608,11 +1911,17 @@ function switchMenu(menuName) {
                     }
                 };
             }
+        } else if (menuName !== 'link' && MENU_GRAPH_KEYS.includes(menuName)) {
+            if (AppState.nodes && AppState.edges && AppState.positions &&
+                Object.keys(AppState.positions).length > 0) {
+                hideLoading();
+                createNetwork(AppState.nodes, AppState.edges, AppState.positions);
+            }
         }
     } else {
-        treeContainer.classList.add('hidden');
-        // Hide sidebar when not in a tree view menu
-        document.getElementById('sidebar').classList.remove('active');
+        if (treeContainer) treeContainer.classList.add('hidden');
+        const sidebarEl = document.getElementById('sidebar');
+        if (sidebarEl) sidebarEl.classList.remove('active');
     }
     
     // Hide popup when switching menus
@@ -1662,8 +1971,11 @@ function setupZoomControls() {
     if (zoomResetBtn) {
         zoomResetBtn.addEventListener('click', () => {
             if (AppState.network && AppState.positions) {
-                // Calculate center of all nodes
-                const nodePositions = Object.values(AppState.positions);
+                // Aligner avec createNetwork (miroir horizontal des coords d’affichage)
+                const visPos = typeof mirrorPositionsX === 'function'
+                    ? mirrorPositionsX(AppState.positions)
+                    : AppState.positions;
+                const nodePositions = Object.values(visPos);
                 if (nodePositions.length > 0) {
                     const avgX = nodePositions.reduce((sum, pos) => sum + pos.x, 0) / nodePositions.length;
                     const avgY = nodePositions.reduce((sum, pos) => sum + pos.y, 0) / nodePositions.length;
@@ -1689,8 +2001,218 @@ function setupZoomControls() {
     }
 }
 
+/** Textes d’aide du bouton « ? » (un contenu par menu actif). */
+const MENU_HELP_CONTENT = {
+    tree: {
+        title: 'Menu Ancêtres',
+        html: `
+<p>Affiche la <strong>ligne ascendante</strong> de la personne choisie (parents, grands-parents, etc.).</p>
+<ul>
+<li>Tapez un nom dans la barre de recherche puis choisissez une personne dans la liste.</li>
+<li><strong>Zoom</strong> : molette ou boutons en bas à droite ; <strong>déplacer</strong> la vue : glisser le fond.</li>
+<li>Survol d’une carte : après environ une seconde, une fiche détail peut s’ouvrir ; elle se ferme vite en quittant la carte.</li>
+</ul>`
+    },
+    descendants: {
+        title: 'Menu Descendants',
+        html: `
+<p>Montre jusqu’à <strong>trois générations de descendants</strong> sous la personne de départ (enfants, petits-enfants, arrière-petits-enfants).</p>
+<ul>
+<li>Choisissez la <strong>personne de départ</strong> via la recherche.</li>
+<li>Les <strong>parents</strong> restent visibles au-dessus pour remonter sans bloquer la navigation.</li>
+<li>Cliquez sur une personne dans le graphe pour en faire la nouvelle racine.</li>
+</ul>`
+    },
+    link: {
+        title: 'Menu Arbre complet',
+        html: `
+<p>Vue de <strong>toutes les personnes</strong> du fichier, organisées par génération. Le chargement peut être long.</p>
+<ul>
+<li>Utilisez le bouton <strong>« Charger l’arbre complet »</strong> au centre de la zone (vous pouvez changer de menu pendant le calcul).</li>
+<li>La recherche permet de retrouver quelqu’un ; le <strong>survol</strong> met en évidence une lignée (lignes vertes).</li>
+<li>Cliquez sur un nœud pour <strong>verrouiller</strong> ou déverrouiller l’affichage de cette lignée.</li>
+</ul>`
+    },
+    lca: {
+        title: 'Menu Ancêtre commun',
+        html: `
+<p>Trouve un <strong>ancêtre commun</strong> entre deux personnes (chemin affiché dans le graphe).</p>
+<ul>
+<li>Saisissez <strong>deux personnes</strong> dans les deux champs de recherche.</li>
+<li>Validez votre sélection : le graphe se met à jour avec le chemin entre les deux branches.</li>
+</ul>`
+    },
+    family: {
+        title: 'Menu Nom de famille',
+        html: `
+<p>Affiche les liens entre personnes qui portent <strong>exactement le même nom de famille</strong> (tel qu’enregistré dans les données).</p>
+<ul>
+<li>Recherchez un nom dans la liste puis sélectionnez-le.</li>
+<li>Seules les relations dont <strong>les deux extrémités</strong> ont ce nom sont affichées (sinon le graphe pourrait inclure toute la base).</li>
+<li>Un seul homonyme apparaît centré à l’écran.</li>
+</ul>`
+    }
+};
+
+function setupDownloadModal() {
+    const modal = document.getElementById('downloadModal');
+    const body = document.getElementById('downloadModalBody');
+    const openBtn = document.getElementById('downloadBtn');
+    const closeBtn = document.getElementById('downloadCloseBtn');
+    if (!modal || !body || !openBtn) {
+        return;
+    }
+
+    const rows = [
+        {
+            key: 'macArm64',
+            label: 'macOS — Apple Silicon (M1, M2, M3…)',
+            hint: 'Image disque .dmg — Mac récents à processeur ARM.'
+        },
+        {
+            key: 'macX64',
+            label: 'macOS — Intel (x64)',
+            hint: 'Image disque .dmg — Mac Intel (Core i5, i7, i9…).'
+        },
+        {
+            key: 'winNsis',
+            label: 'Windows — installateur (64 bits)',
+            hint: 'Fichier .exe — installation classique (Windows 10 / 11 64 bits).'
+        },
+        {
+            key: 'winZip',
+            label: 'Windows — archive ZIP (64 bits)',
+            hint: 'Sans installateur : dézipper puis lancer l’exécutable (usage type portable).'
+        }
+    ];
+
+    function buildBody() {
+        const names = getDownloadFilenames();
+        let html =
+            '<p class="download-intro">Choisissez la version correspondant à votre ordinateur.</p>';
+        rows.forEach(function (row) {
+            const url = getDownloadUrl(row.key);
+            const fname = names[row.key];
+            const linkHtml = url
+                ? '<a href="' +
+                  url.replace(/&/g, '&amp;').replace(/"/g, '&quot;') +
+                  '" rel="noopener noreferrer">' +
+                  fname.replace(/</g, '&lt;') +
+                  '</a>'
+                : '<span class="download-filename">' + fname.replace(/</g, '&lt;') + '</span>';
+            html += '<div class="download-row">';
+            html += '<div class="download-row-title">' + row.label + '</div>';
+            html += '<div class="download-row-file">' + linkHtml + '</div>';
+            html += '<div class="download-hint">' + row.hint + '</div>';
+            html += '</div>';
+        });
+        if (!DOWNLOAD_LINKS.baseUrl || !String(DOWNLOAD_LINKS.baseUrl).trim()) {
+            html +=
+                '<p class="download-notice">Les liens seront actifs lorsque <code>DOWNLOAD_LINKS.baseUrl</code> sera défini dans <code>js/modules/core/config.js</code> (URL du dossier de release, par ex. une release GitHub).</p>';
+        }
+        body.innerHTML = html;
+    }
+
+    function openDownload() {
+        buildBody();
+        modal.classList.remove('hidden');
+        modal.setAttribute('aria-hidden', 'false');
+        document.body.style.overflow = 'hidden';
+    }
+
+    function closeDownload() {
+        modal.classList.add('hidden');
+        modal.setAttribute('aria-hidden', 'true');
+        document.body.style.overflow = '';
+    }
+
+    openBtn.addEventListener('click', function (e) {
+        e.preventDefault();
+        openDownload();
+    });
+
+    if (closeBtn) {
+        closeBtn.addEventListener('click', closeDownload);
+    }
+
+    const backdrop = modal.querySelector('[data-download-close]');
+    if (backdrop) {
+        backdrop.addEventListener('click', closeDownload);
+    }
+
+    document.addEventListener('keydown', function (e) {
+        if (e.key === 'Escape' && !modal.classList.contains('hidden')) {
+            closeDownload();
+        }
+    });
+}
+
+function setupMenuHelpModal() {
+    const modal = document.getElementById('menuHelpModal');
+    const body = document.getElementById('menuHelpBody');
+    const titleEl = document.getElementById('menuHelpTitle');
+    const helpBtn = document.getElementById('menuHelpBtn');
+    const closeBtn = document.getElementById('menuHelpCloseBtn');
+    if (!modal || !body || !titleEl || !helpBtn) {
+        return;
+    }
+
+    function openMenuHelp() {
+        const key = AppState.currentMenu || 'tree';
+        const block = MENU_HELP_CONTENT[key] || MENU_HELP_CONTENT.tree;
+        titleEl.textContent = block.title;
+        body.innerHTML = block.html;
+        modal.classList.remove('hidden');
+        modal.setAttribute('aria-hidden', 'false');
+        document.body.style.overflow = 'hidden';
+    }
+
+    function closeMenuHelp() {
+        modal.classList.add('hidden');
+        modal.setAttribute('aria-hidden', 'true');
+        document.body.style.overflow = '';
+    }
+
+    helpBtn.addEventListener('click', function (e) {
+        e.preventDefault();
+        openMenuHelp();
+    });
+
+    if (closeBtn) {
+        closeBtn.addEventListener('click', closeMenuHelp);
+    }
+
+    const backdrop = modal.querySelector('[data-menu-help-close]');
+    if (backdrop) {
+        backdrop.addEventListener('click', closeMenuHelp);
+    }
+
+    document.addEventListener('keydown', function (e) {
+        if (e.key === 'Escape' && !modal.classList.contains('hidden')) {
+            closeMenuHelp();
+        }
+    });
+}
+
 // Initialize - automatically load the data on page load
 document.addEventListener('DOMContentLoaded', function() {
+    window.addEventListener(
+        'error',
+        function (ev) {
+            console.error(ev.error || ev.message || 'error');
+            try {
+                if (typeof hideLoading === 'function') hideLoading();
+            } catch (_) {}
+        },
+        true
+    );
+    window.addEventListener('unhandledrejection', function (ev) {
+        console.error(ev.reason);
+        try {
+            if (typeof hideLoading === 'function') hideLoading();
+        } catch (_) {}
+    });
+
     // Setup menu switching
     document.querySelectorAll('.menu-item').forEach(btn => {
         btn.addEventListener('click', function() {
@@ -1705,7 +2227,10 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         });
     });
-    
+
+    setupMenuHelpModal();
+    setupDownloadModal();
+
     // Setup zoom controls
     setupZoomControls();
     
@@ -1730,21 +2255,23 @@ document.addEventListener('DOMContentLoaded', function() {
         hideLoading();
     }
     
-    // Keep file input as optional fallback (hidden by default)
-    document.getElementById('jsonFile').addEventListener('change', function(e) {
-        const file = e.target.files[0];
-        if (file) {
-            const reader = new FileReader();
-            reader.onload = function(event) {
-                try {
-                    const data = JSON.parse(event.target.result);
-                    loadTreeData(data);
-                } catch (error) {
-                    showError('Erreur d’analyse JSON : ' + error.message);
-                }
-            };
-            reader.readAsText(file);
-        }
-    });
+    const jsonFileEl = document.getElementById('jsonFile');
+    if (jsonFileEl) {
+        jsonFileEl.addEventListener('change', function (e) {
+            const file = e.target.files[0];
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = function (event) {
+                    try {
+                        const data = JSON.parse(event.target.result);
+                        loadTreeData(data);
+                    } catch (error) {
+                        showError('Erreur d’analyse JSON : ' + error.message);
+                    }
+                };
+                reader.readAsText(file);
+            }
+        });
+    }
 });
 

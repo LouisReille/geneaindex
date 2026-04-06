@@ -12,14 +12,19 @@
  * `ancestorBranchInnerLegShare` : jambe vers le centre plus courte (asymétrie gauche/droite).
  * Relaxation anti-chevauchement : ancestorHorizontalRelaxStep / MaxScale, puis répartition par
  * rangée (`ancestorRowMinCenterPadding`). Si gauche + droite sur la même ligne, blocs séparés
- * avec `ancestorRowBetweenSidesGap` (centres) au lieu d’une seule chaîne entremêlée.
+ * avec `ancestorRowBetweenSidesGap` (centre → centre entre blocs) au lieu d’une seule chaîne
+ * entremêlée. `ancestorRowBetweenCouplesGap` : écart horizontal entre couples (ou célibataires)
+ * distincts sur la même ligne (≥ minimum anti-chevauchement).
  *
  * Si `ancestorUniformSpacing` est absent ou trop petit, on déduit une valeur à partir des
  * anciennes clés horizontal + vertical (min des deux, plafonné par le minimum physique des couples).
  */
 const MENU_LAYOUT_ANCETRES = {
     ancestorRowMinCenterPadding: 8,
-    ancestorRowBetweenSidesGap: 140,
+    /** Écart centre → centre entre couples (ou personnes seules) distincts sur une même ligne. */
+    ancestorRowBetweenCouplesGap: 380,
+    /** Écart entre blocs (gauche / droite / etc.) quand une ligne mélange les lignées. */
+    ancestorRowBetweenSidesGap: 280,
     ancestorUniformSpacing: 280,
     ancestorBranchInnerLegShare: 0.36,
     ancestorLeftBranchCoupleGapMult: 0.82,

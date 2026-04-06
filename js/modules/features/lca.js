@@ -152,3 +152,39 @@ function findLCA(person1Id, person2Id, relationships, individuals) {
         totalDistance: distance1 + distance2
     };
 }
+
+/**
+ * Carte enfant → parents (tous les liens parent–enfant).
+ */
+function buildChildToParentsMap(relationships) {
+    const m = new Map();
+    (relationships || []).forEach((rel) => {
+        if (rel.type === 'parent-child') {
+            if (!m.has(rel.to)) m.set(rel.to, []);
+            const arr = m.get(rel.to);
+            if (!arr.includes(rel.from)) arr.push(rel.from);
+        }
+    });
+    return m;
+}
+
+/**
+ * Pour chaque maillon d’un chemin vers l’A.C., ajoute l’autre parent (co-parent) s’il existe.
+ */
+function collectCoParentIdsForLCAPaths(path1, path2, childToParents) {
+    const extra = new Set();
+    function addForPath(path) {
+        if (!path || path.length < 2) return;
+        for (let j = 1; j < path.length; j++) {
+            const child = path[j - 1];
+            const parentOnPath = path[j];
+            const parents = childToParents.get(child) || [];
+            parents.forEach((p) => {
+                if (p !== parentOnPath) extra.add(p);
+            });
+        }
+    }
+    addForPath(path1);
+    addForPath(path2);
+    return extra;
+}

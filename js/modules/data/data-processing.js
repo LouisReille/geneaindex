@@ -210,7 +210,10 @@ function calculateLevels(individuals, relationships) {
     
     // Set levels for children (newer generations get higher level numbers = lower on screen)
     let changed = true;
-    while (changed) {
+    const maxLevelIterations = Math.max(individuals.length, relationships.length) + 100;
+    let levelIteration = 0;
+    while (changed && levelIteration < maxLevelIterations) {
+        levelIteration += 1;
         changed = false;
         relationships.forEach(rel => {
             if (rel.type === 'parent-child') {

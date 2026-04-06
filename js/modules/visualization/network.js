@@ -1,8 +1,28 @@
 // Network creation and event handlers
 
+/**
+ * Miroir horizontal pour l’affichage vis-network : corrige l’inversion gauche/droite
+ * par rapport au placement calculé (tous les menus utilisent la même conversion).
+ */
+function mirrorPositionsX(positions) {
+    if (!positions || typeof positions !== 'object') {
+        return {};
+    }
+    const out = {};
+    Object.keys(positions).forEach((id) => {
+        const p = positions[id];
+        if (p && typeof p.x === 'number' && typeof p.y === 'number') {
+            out[id] = { x: -p.x, y: p.y };
+        }
+    });
+    return out;
+}
+
 function createNetwork(nodes, edges, positions) {
+    const visPositions = mirrorPositionsX(positions);
+
     // Filter nodes to only include those with positions
-    const positionedNodeIds = new Set(Object.keys(positions));
+    const positionedNodeIds = new Set(Object.keys(visPositions));
     const allNodeIds = Array.from(nodes.getIds());
     const nodesToRemove = allNodeIds.filter(nodeId => !positionedNodeIds.has(nodeId));
     
@@ -22,8 +42,8 @@ function createNetwork(nodes, edges, positions) {
     // Set positions on nodes - preserve all existing properties
     const nodeIds = Array.from(nodes.getIds());
     nodeIds.forEach(nodeId => {
-        if (positions[nodeId]) {
-            const pos = positions[nodeId];
+        if (visPositions[nodeId]) {
+            const pos = visPositions[nodeId];
             const node = nodes.get(nodeId);
             // Create update object with position and preserve all existing properties
             const update = {
@@ -55,10 +75,10 @@ function createNetwork(nodes, edges, positions) {
     });
     
     // Update marriage edges: make them curved if they pass through other nodes
-    updateMarriageEdges(edges, positions, nodes);
+    updateMarriageEdges(edges, visPositions, nodes);
     
     // Calculate bounding box of all nodes to determine minimum zoom
-    const nodePositions = Object.values(positions);
+    const nodePositions = Object.values(visPositions);
     if (nodePositions.length === 0) {
         return; // No nodes to display
     }
@@ -67,6 +87,9 @@ function createNetwork(nodes, edges, positions) {
     
     const isLinkMode = AppState.currentMenu === 'link';
     const isFamilyNameMode = AppState.currentMenu === 'family';
+    const isLcaMode = AppState.currentMenu === 'lca';
+    const isDescendantsMode = AppState.currentMenu === 'descendants';
+    const freeZoomMenu = isLinkMode || isFamilyNameMode || isLcaMode || isDescendantsMode;
 
     const selectedPersonId = AppState.rootPersonId;
     let hasTwoParents = false;
@@ -84,8 +107,13 @@ function createNetwork(nodes, edges, positions) {
     const minY = bbAll.minY;
     const maxY = bbAll.maxY;
 
-    const treeWidth = maxX - minX;
-    const treeHeight = maxY - minY;
+    // Un seul point → largeur/hauteur 0 : évite division par 0 ; on approxime la taille d’une carte
+    let treeWidth = Math.max(maxX - minX, 1);
+    let treeHeight = Math.max(maxY - minY, 1);
+    if (numNodes === 1) {
+        treeWidth = Math.max(treeWidth, 280);
+        treeHeight = Math.max(treeHeight, 120);
+    }
     
     // Get container dimensions
     const container = document.getElementById('tree-container');
@@ -98,15 +126,15 @@ function createNetwork(nodes, edges, positions) {
     const scaleY = (containerHeight * (1 - 2 * padding)) / treeHeight;
     const minScaleToFitAll = Math.min(scaleX, scaleY);
     
-    // Allow zooming out much more than needed to fit all nodes (allow 3x more zoom out)
-    // This lets users zoom out significantly beyond what's needed to see all ancestors
-    const zoomMin = Math.max(0.01, minScaleToFitAll * 0.33);
+    // Zoom arrière : facteur plus petit = plus de dézoom (descendants : encore plus loin que les autres vues libres)
+    const zoomOutFactor = isDescendantsMode ? 0.12 : 0.33;
+    const zoomMin = Math.max(0.01, minScaleToFitAll * zoomOutFactor);
     
     // Calculate maximum zoom to ensure at least 3 nodes are visible
     let zoomMax = 2.0;
     let zoomEnabled = true;
     
-    if (isLinkMode || isFamilyNameMode) {
+    if (freeZoomMenu) {
         // Large / free-layout graphs: allow zoom so nodes stay readable
         zoomMax = 3.0;
         zoomEnabled = true;
@@ -118,8 +146,8 @@ function createNetwork(nodes, edges, positions) {
         // Calculate maximum zoom based on ensuring at least 3 nodes are visible
         // Find the 3 nodes that should be visible: selected person + 2 parents
         const threeNodes = [];
-        if (selectedPersonId && positions[selectedPersonId]) {
-            threeNodes.push(positions[selectedPersonId]);
+        if (selectedPersonId && visPositions[selectedPersonId]) {
+            threeNodes.push(visPositions[selectedPersonId]);
             
             // Find parents of selected person
             if (AppState.treeData) {
@@ -130,8 +158,8 @@ function createNetwork(nodes, edges, positions) {
                     .slice(0, 2); // Take first 2 parents
                 
                 parents.forEach(parentId => {
-                    if (positions[parentId]) {
-                        threeNodes.push(positions[parentId]);
+                    if (visPositions[parentId]) {
+                        threeNodes.push(visPositions[parentId]);
                     }
                 });
             }
@@ -216,7 +244,12 @@ function createNetwork(nodes, edges, positions) {
             zoomView: zoomEnabled,
             dragView: true,
             dragNodes: false,
-            zoomSpeed: 1.2 // Zoom speed (1.2 = 20% per scroll step)
+            zoomSpeed: 1.2, // Zoom speed (1.2 = 20% per scroll step)
+            // Ctrl+molette / pincement trackpad (Chrome envoie wheel+ctrl pour le pinch)
+            keyboard: {
+                enabled: true,
+                bindToWindow: false
+            }
         },
         configure: {
             enabled: false
@@ -245,6 +278,30 @@ function createNetwork(nodes, edges, positions) {
         // Network already exists, just update the data
         console.log('[createNetwork] Preserving existing Link network');
         AppState.network.setData(data_vis);
+    }
+
+    const idsAfterLayout = Array.from(nodes.getIds());
+    if (idsAfterLayout.length === 1 && AppState.network) {
+        const onlyId = idsAfterLayout[0];
+        const runFocus = () => {
+            try {
+                if (!AppState.network || !AppState.nodes.get(onlyId)) return;
+                AppState.network.focus(onlyId, {
+                    scale: 1.15,
+                    animation: {
+                        duration: 280,
+                        easingFunction: 'easeInOutQuad'
+                    }
+                });
+            } catch (e) {
+                console.warn('[createNetwork] focus single node', e);
+            }
+        };
+        requestAnimationFrame(() => {
+            requestAnimationFrame(runFocus);
+        });
+        // Après enforceZoomLimits (timeout 100 ms) : recentrer si la vue a été forcée
+        setTimeout(runFocus, 180);
     }
 }
 
@@ -981,11 +1038,16 @@ function setupNetworkEvents() {
             showFamilyTreeLines(nodeId);
         }
         
-        // Show popup after 1 second
+        const showDelay = typeof CONFIG !== 'undefined' && CONFIG.personPopupShowDelayMs != null
+            ? CONFIG.personPopupShowDelayMs
+            : 1000;
         showPopupTimeout = setTimeout(() => {
-            showPersonDetails(node.data);
             showPopupTimeout = null;
-        }, 1000);
+            if (currentHoveredNodeId !== nodeId) {
+                return;
+            }
+            showPersonDetails(node.data);
+        }, showDelay);
     });
     
     // Handle node blur to hide popup after 1 second and hide family tree lines
@@ -1022,11 +1084,13 @@ function setupNetworkEvents() {
             clearTimeout(hidePopupTimeout);
         }
         
-        // Hide popup after 1 second
+        const hideDelay = typeof CONFIG !== 'undefined' && CONFIG.personPopupHideDelayMs != null
+            ? CONFIG.personPopupHideDelayMs
+            : 250;
         hidePopupTimeout = setTimeout(() => {
             hidePersonDetails();
             hidePopupTimeout = null;
-        }, 1000);
+        }, hideDelay);
     });
     
     // Handle node click (descendants / link / tree)
@@ -1035,7 +1099,7 @@ function setupNetworkEvents() {
             const nodeId = params.nodes[0];
             
             if (AppState.currentMenu === 'descendants' && AppState.treeData) {
-                const maxG = AppState.descendantsMaxGenerations || 3;
+                const maxG = Math.min(3, Number(AppState.descendantsMaxGenerations) || 3);
                 buildDescendantsTree(AppState.treeData, nodeId, maxG);
                 return;
             }
@@ -1106,8 +1170,10 @@ function setupNetworkEvents() {
             }
         });
         
+        const popupLeaveHideMs = typeof CONFIG !== 'undefined' && CONFIG.personPopupHideDelayMs != null
+            ? CONFIG.personPopupHideDelayMs
+            : 250;
         popup.addEventListener('mouseleave', function() {
-            // Start hide timeout when leaving popup
             if (hidePopupTimeout) {
                 clearTimeout(hidePopupTimeout);
             }
@@ -1115,7 +1181,7 @@ function setupNetworkEvents() {
                 hidePersonDetails();
                 hidePopupTimeout = null;
                 currentHoveredNodeId = null;
-            }, 1000);
+            }, popupLeaveHideMs);
         });
     }
     
@@ -1176,9 +1242,35 @@ function enforceZoomLimits() {
     if (nodePositions.length === 0) return;
     
     const numNodes = nodePositions.length;
-    
+
     const isLinkMode = AppState.currentMenu === 'link';
     const isFamilyNameMode = AppState.currentMenu === 'family';
+    const isLcaMode = AppState.currentMenu === 'lca';
+    const isDescendantsMode = AppState.currentMenu === 'descendants';
+    const freeZoomMenu = isLinkMode || isFamilyNameMode || isLcaMode || isDescendantsMode;
+
+    /**
+     * Un seul nœud : ne pas dériver minScale depuis une bbox ~1×1 (sinon minScale énorme et
+     * moveTo écrase le focus() — la personne disparaît de la vue).
+     */
+    if (numNodes === 1) {
+        const minScaleSingle = 0.05;
+        const maxScaleSingle = freeZoomMenu ? 4.0 : 2.5;
+        if (currentScale < minScaleSingle) {
+            AppState.network.moveTo({
+                position: AppState.network.getViewPosition(),
+                scale: minScaleSingle,
+                animation: false
+            });
+        } else if (currentScale > maxScaleSingle) {
+            AppState.network.moveTo({
+                position: AppState.network.getViewPosition(),
+                scale: maxScaleSingle,
+                animation: false
+            });
+        }
+        return;
+    }
 
     const selectedPersonId = AppState.rootPersonId;
     
@@ -1197,20 +1289,20 @@ function enforceZoomLimits() {
     const minY = bbAll.minY;
     const maxY = bbAll.maxY;
 
-    const treeWidth = maxX - minX;
-    const treeHeight = maxY - minY;
+    const treeWidthEnf = Math.max(maxX - minX, 1);
+    const treeHeightEnf = Math.max(maxY - minY, 1);
     
     const padding = 0.02; // 2% padding
-    const scaleX = (containerWidth * (1 - 2 * padding)) / treeWidth;
-    const scaleY = (containerHeight * (1 - 2 * padding)) / treeHeight;
+    const scaleX = (containerWidth * (1 - 2 * padding)) / treeWidthEnf;
+    const scaleY = (containerHeight * (1 - 2 * padding)) / treeHeightEnf;
     const minScaleToFitAll = Math.min(scaleX, scaleY);
     
-    // Allow zooming out much more (3x more than needed to fit all nodes)
-    const minScale = Math.max(0.01, minScaleToFitAll * 0.33);
+    const zoomOutFactorEnforce = isDescendantsMode ? 0.12 : 0.33;
+    const minScale = Math.max(0.01, minScaleToFitAll * zoomOutFactorEnforce);
     
     // Calculate maximum zoom
     let maxScale = 2.0;
-    if (isLinkMode || isFamilyNameMode) {
+    if (freeZoomMenu) {
         maxScale = 3.0;
     } else if (numNodes >= 3 && hasTwoParents) {
         // Find the 3 nodes: selected person + 2 parents

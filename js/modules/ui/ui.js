@@ -3,12 +3,15 @@
 function showPersonDetails(person) {
     const popup = document.getElementById('personPopup');
     const popupContent = document.getElementById('personPopupContent');
-    
+    if (!popup || !popupContent) {
+        return;
+    }
     if (!person || !AppState.treeData) {
         popup.classList.add('hidden');
         return;
     }
-    
+
+    try {
     const relationships = AppState.treeData.relationships || [];
     const individuals = AppState.treeData.individuals || [];
     
@@ -124,18 +127,16 @@ function showPersonDetails(person) {
     const html = createPersonPopupHTML(person, marriages, parents, children, siblings);
     popupContent.innerHTML = html;
     popup.classList.remove('hidden');
+    } catch (e) {
+        console.error('showPersonDetails', e);
+        popup.classList.add('hidden');
+    }
 }
 
 function hidePersonDetails() {
     const popup = document.getElementById('personPopup');
+    if (!popup) return;
     popup.classList.add('hidden');
-}
-
-function updateStats(data) {
-    document.getElementById('individualCount').textContent = (data.individuals || []).length;
-    document.getElementById('relationshipCount').textContent = (data.relationships || []).length;
-    const planches = Object.keys(data.planches || {});
-    document.getElementById('plancheCount').textContent = planches.length;
 }
 
 function showError(message) {
@@ -146,7 +147,20 @@ function showError(message) {
     loadingEl.classList.add('hidden');
 }
 
+/** HTML par défaut du panneau #loading (évite d’afficher le texte « arbre complet » sur un autre menu). */
+function resetLoadingPanelDefault() {
+    const loadingEl = document.getElementById('loading');
+    if (loadingEl) {
+        loadingEl.innerHTML = '<div class="loading-spinner"></div><p>Chargement…</p><p style="font-size: 0.9em; color: #666;">Veuillez patienter.</p>';
+    }
+    const progressBarContainer = document.getElementById('progressBarContainer');
+    if (progressBarContainer) {
+        progressBarContainer.classList.remove('link-mode-progress');
+    }
+}
+
 function showLoading() {
+    resetLoadingPanelDefault();
     const loadingEl = document.getElementById('loading');
     const errorEl = document.getElementById('error');
     if (loadingEl) {
@@ -155,7 +169,6 @@ function showLoading() {
     if (errorEl) {
         errorEl.classList.add('hidden');
     }
-    // Don't show progress bar by default - only show it explicitly in buildLinkTree
     const progressBarContainer = document.getElementById('progressBarContainer');
     if (progressBarContainer && !progressBarContainer.classList.contains('link-mode-progress')) {
         progressBarContainer.classList.add('hidden');
@@ -167,10 +180,11 @@ function hideLoading() {
     if (loadingEl) {
         loadingEl.classList.add('hidden');
     }
-    // Also hide progress bar when hiding loading (but preserve link-mode-progress flag for next time)
+    resetLoadingPanelDefault();
     const progressBarContainer = document.getElementById('progressBarContainer');
     if (progressBarContainer) {
         progressBarContainer.classList.add('hidden');
+        progressBarContainer.classList.remove('link-mode-progress');
     }
 }
 

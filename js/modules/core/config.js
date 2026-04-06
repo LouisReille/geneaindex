@@ -31,8 +31,42 @@ const CONFIG = {
     // Node styling
     nodeBorderColor: '#2c3e50',
     nodeHighlightBorder: '#e74c3c',
-    defaultPlancheColor: '#95a5a6'
+    defaultPlancheColor: '#95a5a6',
+
+    /** Popup fiche personne : affichage après survol continu (ms), masquage après sortie (ms). */
+    personPopupShowDelayMs: 1000,
+    personPopupHideDelayMs: 250
 };
+
+/**
+ * Téléchargements de l’app (Electron) : doit rester aligné avec package.json version
+ * et avec le schéma artifactName de electron-builder (${productName}-${version}-${os}-${arch}.${ext}).
+ */
+var DOWNLOAD_LINKS = {
+    version: '1.0.0',
+    /** URL du dossier de release sans slash final (ex. GitHub : …/releases/download/v1.0.0). Vide = liens inactifs. */
+    baseUrl: ''
+};
+
+function getDownloadFilenames() {
+    const v = DOWNLOAD_LINKS.version;
+    return {
+        macArm64: 'Geneaindex-' + v + '-mac-arm64.dmg',
+        macX64: 'Geneaindex-' + v + '-mac-x64.dmg',
+        winNsis: 'Geneaindex-' + v + '-win-x64.exe',
+        winZip: 'Geneaindex-' + v + '-win-x64.zip'
+    };
+}
+
+function getDownloadUrl(fileKey) {
+    const names = getDownloadFilenames();
+    const name = names[fileKey];
+    const base = DOWNLOAD_LINKS.baseUrl;
+    if (!name || !base || typeof base !== 'string' || !base.trim()) {
+        return null;
+    }
+    return base.replace(/\/+$/, '') + '/' + encodeURIComponent(name);
+}
 
 /**
  * Copie superficielle d’un profil (nombres / booléens uniquement).
