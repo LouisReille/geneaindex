@@ -46,9 +46,9 @@ var DOWNLOAD_LINKS = {
     version: '1.0.0',
     /**
      * Dossier de téléchargement GitHub (sans slash final).
-     * Doit correspondre au tag de release : tag `v1.0.0` → …/download/v1.0.0
+     * Doit utiliser le tag exact de la release (ex. `1.0.0` ou `v1.0.0` — pas interchangeable).
      */
-    baseUrl: 'https://github.com/LouisReille/geneaindex/releases/download/v1.0.0'
+    baseUrl: 'https://github.com/LouisReille/geneaindex/releases/download/1.0.0'
 };
 
 function getDownloadFilenames() {
