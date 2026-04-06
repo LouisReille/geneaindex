@@ -22,10 +22,14 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Build DMGs (arm64 + x64)
-        run: npx electron-builder --mac dmg
+      # --x64 et --arm64 explicites (évite qu’un seul .dmg soit produit sur runner Apple Silicon)
+      - name: Build DMGs Intel + Apple Silicon
+        run: npx electron-builder --mac dmg --x64 --arm64
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Lister les .dmg
+        run: ls -la dist/*.dmg || true
 
       - name: Upload DMGs to this release
         uses: softprops/action-gh-release@v2

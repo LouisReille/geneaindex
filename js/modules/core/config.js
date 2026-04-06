@@ -48,7 +48,12 @@ var DOWNLOAD_LINKS = {
      * Dossier de téléchargement GitHub (sans slash final).
      * Doit utiliser le tag exact de la release (ex. `1.0.0` ou `v1.0.0` — pas interchangeable).
      */
-    baseUrl: 'https://github.com/LouisReille/geneaindex/releases/download/1.0.0'
+    baseUrl: 'https://github.com/LouisReille/geneaindex/releases/download/1.0.0',
+    /**
+     * Page GitHub « Releases » : toujours joignable (pas de 404), liste des .dmg / .exe à télécharger.
+     * À envoyer par mail si un lien direct vers un fichier manque encore sur la release.
+     */
+    releasePageUrl: 'https://github.com/LouisReille/geneaindex/releases/latest'
 };
 
 function getDownloadFilenames() {

@@ -2112,8 +2112,23 @@ function setupDownloadModal() {
 
     function buildBody() {
         const names = getDownloadFilenames();
-        let html =
-            '<p class="download-intro">Choisissez la version correspondant à votre ordinateur.</p>';
+        const pageUrl =
+            typeof DOWNLOAD_LINKS.releasePageUrl === 'string'
+                ? DOWNLOAD_LINKS.releasePageUrl.trim()
+                : '';
+        let html = '';
+        if (pageUrl) {
+            html +=
+                '<p class="download-release-page">' +
+                '<strong>Lien sûr (page GitHub)</strong> — si un fichier ci-dessous renvoie une erreur, ouvrez cette page et téléchargez le bon fichier dans la liste « Assets » : ' +
+                '<a href="' +
+                pageUrl.replace(/&/g, '&amp;').replace(/"/g, '&quot;') +
+                '" rel="noopener noreferrer">' +
+                pageUrl.replace(/</g, '&lt;') +
+                '</a></p>';
+        }
+        html +=
+            '<p class="download-intro">Choisissez la version correspondant à votre ordinateur (liens directs vers chaque fichier).</p>';
         rows.forEach(function (row) {
             if (row.sectionTitle) {
                 html += '<p class="download-section">' + row.sectionTitle + '</p>';

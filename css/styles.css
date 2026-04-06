@@ -265,6 +265,23 @@ header {
     color: #37474f;
 }
 
+.download-release-page {
+    margin: 0 0 1rem;
+    padding: 0.75rem 0.85rem;
+    background: #e8f5e9;
+    border: 1px solid #a5d6a7;
+    border-radius: 6px;
+    color: #1b5e20;
+    font-size: 0.92rem;
+    line-height: 1.5;
+}
+
+.download-release-page a {
+    color: #0d47a1;
+    font-weight: 600;
+    word-break: break-all;
+}
+
 .download-section {
     margin: 1rem 0 0.5rem;
     font-size: 0.8rem;
