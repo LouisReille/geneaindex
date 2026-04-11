@@ -30,23 +30,55 @@
     ],
     "mac": {
       "category": "public.app-category.education",
+      "extendInfo": {
+        "LSMinimumSystemVersion": "10.11.0"
+      },
       "target": [
-        { "target": "dmg", "arch": ["arm64", "x64"] },
-        { "target": "zip", "arch": ["arm64", "x64"] }
+        {
+          "target": "dmg",
+          "arch": [
+            "arm64",
+            "x64"
+          ]
+        },
+        {
+          "target": "zip",
+          "arch": [
+            "arm64",
+            "x64"
+          ]
+        }
       ]
     },
     "win": {
       "target": [
-        { "target": "nsis", "arch": ["x64", "arm64", "ia32"] },
-        { "target": "zip", "arch": ["x64", "arm64", "ia32"] }
+        {
+          "target": "nsis",
+          "arch": [
+            "x64",
+            "arm64",
+            "ia32"
+          ]
+        },
+        {
+          "target": "zip",
+          "arch": [
+            "x64",
+            "arm64",
+            "ia32"
+          ]
+        }
       ]
     },
     "linux": {
-      "target": ["AppImage", "deb"]
+      "target": [
+        "AppImage",
+        "deb"
+      ]
     }
   },
   "devDependencies": {
-    "electron": "^33.2.1",
-    "electron-builder": "^25.1.8"
+    "electron": "^19.1.9",
+    "electron-builder": "^23.6.0"
   }
 }
