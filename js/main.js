@@ -2072,8 +2072,13 @@ function setupDownloadModal() {
         },
         {
             key: 'macX64',
-            label: 'Intel (x64)',
-            hint: 'Image disque .dmg — Mac Intel (Core i5, i7, i9…).'
+            label: 'Intel (x64) — image disque .dmg',
+            hint: 'Mac Intel classiques. Si macOS affiche « requiert macOS 11 » ou erreur au montage, utilisez le ZIP Intel ci-dessous.'
+        },
+        {
+            key: 'macZipX64',
+            label: 'Intel (x64) — archive .zip',
+            hint: 'À privilégier sur macOS 10.13–10.15 : télécharger, dézipper, glisser Geneaindex.app dans Applications (souvent plus fiable que le .dmg).'
         },
         {
             sectionTitle: 'Windows — PC 64 bits (Intel / AMD)',

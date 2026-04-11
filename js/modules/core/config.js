@@ -61,6 +61,8 @@ function getDownloadFilenames() {
     return {
         macArm64: 'Geneaindex-' + v + '-mac-arm64.dmg',
         macX64: 'Geneaindex-' + v + '-mac-x64.dmg',
+        /** Même build que le .dmg ; souvent plus fiable sur macOS 10.13 (vieux systèmes). */
+        macZipX64: 'Geneaindex-' + v + '-mac-x64.zip',
         winNsisX64: 'Geneaindex-' + v + '-win-x64.exe',
         winZipX64: 'Geneaindex-' + v + '-win-x64.zip',
         winNsisArm64: 'Geneaindex-' + v + '-win-arm64.exe',
