@@ -39,50 +39,6 @@ const CONFIG = {
 };
 
 /**
- * Téléchargements de l’app (Electron) : doit rester aligné avec package.json version
- * et avec le schéma artifactName de electron-builder (${productName}-${version}-${os}-${arch}.${ext}).
- */
-var DOWNLOAD_LINKS = {
-    version: '1.0.0',
-    /**
-     * Dossier de téléchargement GitHub (sans slash final).
-     * Doit utiliser le tag exact de la release (ex. `1.0.0` ou `v1.0.0` — pas interchangeable).
-     */
-    baseUrl: 'https://github.com/LouisReille/geneaindex/releases/download/1.0.0',
-    /**
-     * Page GitHub « Releases » : toujours joignable (pas de 404), liste des .dmg / .exe à télécharger.
-     * À envoyer par mail si un lien direct vers un fichier manque encore sur la release.
-     */
-    releasePageUrl: 'https://github.com/LouisReille/geneaindex/releases/latest'
-};
-
-function getDownloadFilenames() {
-    const v = DOWNLOAD_LINKS.version;
-    return {
-        macArm64: 'Geneaindex-' + v + '-mac-arm64.dmg',
-        macX64: 'Geneaindex-' + v + '-mac-x64.dmg',
-        /** Même build que le .dmg ; souvent plus fiable sur macOS 10.13 (vieux systèmes). */
-        macZipX64: 'Geneaindex-' + v + '-mac-x64.zip',
-        winNsisX64: 'Geneaindex-' + v + '-win-x64.exe',
-        winZipX64: 'Geneaindex-' + v + '-win-x64.zip',
-        winNsisArm64: 'Geneaindex-' + v + '-win-arm64.exe',
-        winZipArm64: 'Geneaindex-' + v + '-win-arm64.zip',
-        winNsisIa32: 'Geneaindex-' + v + '-win-ia32.exe',
-        winZipIa32: 'Geneaindex-' + v + '-win-ia32.zip'
-    };
-}
-
-function getDownloadUrl(fileKey) {
-    const names = getDownloadFilenames();
-    const name = names[fileKey];
-    const base = DOWNLOAD_LINKS.baseUrl;
-    if (!name || !base || typeof base !== 'string' || !base.trim()) {
-        return null;
-    }
-    return base.replace(/\/+$/, '') + '/' + encodeURIComponent(name);
-}
-
-/**
  * Copie superficielle d’un profil (nombres / booléens uniquement).
  * Chaque appel de placement reçoit sa propre copie : aucune fuite entre menus.
  */

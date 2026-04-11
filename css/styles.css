@@ -127,20 +127,13 @@ header {
     gap: 0.5rem;
 }
 
-/** Boutons ⬇ / ? à droite du bandeau de menus */
-.header-actions {
-    flex: 0 0 auto;
-    margin-left: auto;
-    display: flex;
-    gap: 0.5rem;
-    align-items: center;
-}
-
+/** Bouton ? à droite du bandeau de menus */
 .menu-help-btn {
     flex: 0 0 auto;
     width: 2rem;
     height: 2rem;
     padding: 0;
+    margin-left: auto;
     border-radius: 50%;
     border: 2px solid rgba(255, 255, 255, 0.85);
     background: rgba(255, 255, 255, 0.12);
@@ -254,109 +247,6 @@ header {
 
 .menu-help-body li {
     margin-bottom: 0.35rem;
-}
-
-.download-dialog {
-    max-width: 36rem;
-}
-
-.download-modal-body .download-intro {
-    margin: 0 0 1rem;
-    color: #37474f;
-}
-
-.download-release-page {
-    margin: 0 0 1rem;
-    padding: 0.75rem 0.85rem;
-    background: #e8f5e9;
-    border: 1px solid #a5d6a7;
-    border-radius: 6px;
-    color: #1b5e20;
-    font-size: 0.92rem;
-    line-height: 1.5;
-}
-
-.download-release-page a {
-    color: #0d47a1;
-    font-weight: 600;
-    word-break: break-all;
-}
-
-.download-section {
-    margin: 1rem 0 0.5rem;
-    font-size: 0.8rem;
-    font-weight: 700;
-    text-transform: uppercase;
-    letter-spacing: 0.04em;
-    color: #546e7a;
-}
-
-.download-intro + .download-section {
-    margin-top: 0.75rem;
-}
-
-.download-row {
-    margin-bottom: 0.75rem;
-    padding: 0.65rem 0.75rem;
-    background: #f7f9fb;
-    border-radius: 6px;
-    border: 1px solid #e8ecf0;
-}
-
-.download-row:last-of-type {
-    margin-bottom: 0;
-}
-
-.download-row-title {
-    font-weight: 600;
-    color: #1a252f;
-    margin-bottom: 0.35rem;
-    font-size: 0.95rem;
-}
-
-.download-row-file {
-    font-size: 0.88rem;
-    word-break: break-all;
-}
-
-.download-row-file a {
-    color: #1565c0;
-    font-weight: 600;
-    text-decoration: none;
-}
-
-.download-row-file a:hover {
-    text-decoration: underline;
-}
-
-.download-filename {
-    color: #546e7a;
-    font-weight: 500;
-}
-
-.download-hint {
-    font-size: 0.82rem;
-    color: #546e7a;
-    margin-top: 0.35rem;
-    line-height: 1.45;
-}
-
-.download-notice {
-    font-size: 0.85rem;
-    color: #5d4037;
-    background: #fff8e1;
-    border: 1px solid #ffe082;
-    border-radius: 6px;
-    padding: 0.65rem 0.75rem;
-    margin-top: 1rem;
-    line-height: 1.5;
-}
-
-.download-notice code {
-    font-size: 0.8rem;
-    background: rgba(255, 255, 255, 0.7);
-    padding: 0.1rem 0.3rem;
-    border-radius: 3px;
 }
 
 .menu-item {

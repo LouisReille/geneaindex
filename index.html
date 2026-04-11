@@ -21,10 +21,7 @@
                 <button class="menu-item" data-menu="lca">👥 Ancêtre commun</button>
                 <button class="menu-item" data-menu="family">👨‍👩‍👧‍👦 Nom de famille</button>
             </nav>
-            <div class="header-actions">
-                <button type="button" id="downloadBtn" class="menu-help-btn" title="Télécharger l’application" aria-label="Télécharger l’application">⬇</button>
-                <button type="button" id="menuHelpBtn" class="menu-help-btn" title="Aide sur ce menu" aria-label="Aide sur ce menu">?</button>
-            </div>
+            <button type="button" id="menuHelpBtn" class="menu-help-btn" title="Aide sur ce menu" aria-label="Aide sur ce menu">?</button>
         </div>
         <div class="controls" id="treeControls">
             <div class="file-input-wrapper hidden">
@@ -136,16 +133,6 @@
                     <button type="button" class="menu-help-close" id="menuHelpCloseBtn" aria-label="Fermer">×</button>
                 </div>
                 <div class="menu-help-body" id="menuHelpBody"></div>
-            </div>
-        </div>
-        <div id="downloadModal" class="menu-help-modal download-modal hidden" aria-hidden="true">
-            <div class="menu-help-backdrop" data-download-close="1"></div>
-            <div class="menu-help-dialog download-dialog" role="dialog" aria-modal="true" aria-labelledby="downloadModalTitle">
-                <div class="menu-help-header">
-                    <h2 id="downloadModalTitle" class="menu-help-heading">Télécharger Geneaindex</h2>
-                    <button type="button" class="menu-help-close" id="downloadCloseBtn" aria-label="Fermer">×</button>
-                </div>
-                <div class="menu-help-body download-modal-body" id="downloadModalBody"></div>
             </div>
         </div>
     </main>
