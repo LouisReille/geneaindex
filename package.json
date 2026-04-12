@@ -7,6 +7,7 @@
   "scripts": {
     "start": "electron .",
     "pack": "electron-builder --dir",
+    "dist:mac-avec-lanceur": "npm run pack && bash scripts/build-mac-avec-lanceur.sh",
     "dist": "electron-builder",
     "dist:mac": "electron-builder --mac",
     "dist:win": "electron-builder --win"
