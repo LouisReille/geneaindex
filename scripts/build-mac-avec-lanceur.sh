@@ -7,7 +7,7 @@ ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
 
 APP=""
-for candidate in dist/mac/Geneaindex.app dist/mac-arm64/Geneaindex.app dist/mac-x64/Geneaindex.app; do
+for candidate in dist/mac/Geneaindex.app dist/mac-universal/Geneaindex.app dist/mac-arm64/Geneaindex.app dist/mac-x64/Geneaindex.app; do
   if [ -d "$candidate" ]; then
     APP="$candidate"
     break

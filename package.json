@@ -6,7 +6,7 @@
   "main": "electron/main.js",
   "scripts": {
     "start": "electron .",
-    "pack": "electron-builder --dir",
+    "pack": "electron-builder --dir --mac --universal",
     "dist:mac-avec-lanceur": "npm run pack && bash scripts/build-mac-avec-lanceur.sh",
     "dist": "electron-builder",
     "dist:mac": "electron-builder --mac",
@@ -29,7 +29,13 @@
     ],
     "mac": {
       "category": "public.app-category.education",
-      "target": ["dmg", "zip"]
+      "extendInfo": {
+        "LSMinimumSystemVersion": "10.11.0"
+      },
+      "target": [
+        { "target": "dmg", "arch": ["universal"] },
+        { "target": "zip", "arch": ["universal"] }
+      ]
     },
     "win": {
       "target": ["nsis", "zip"]
@@ -39,7 +45,7 @@
     }
   },
   "devDependencies": {
-    "electron": "^33.2.1",
-    "electron-builder": "^25.1.8"
+    "electron": "^19.1.9",
+    "electron-builder": "^23.6.0"
   }
 }
